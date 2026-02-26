@@ -57,6 +57,28 @@ def find_transaction_header_row(df_raw):
 
 # ── Smart Column Normalizer ────────────────────────────────────
 def normalize_columns(df):
+    # ── Direct column rename for common formats ──────────
+    direct_map = {
+        'Category': 'TRANSACTION DETAILS',
+        'Type': 'TRANSACTION DETAILS',
+        'Narration': 'TRANSACTION DETAILS',
+        'Description': 'TRANSACTION DETAILS',
+        'Particulars': 'TRANSACTION DETAILS',
+        'Timestamp': 'DATE',
+        'Transaction Date': 'DATE',
+        'Txn Date': 'DATE',
+        'Debit': 'WITHDRAWAL AMT',
+        'Debit Amt': 'WITHDRAWAL AMT',
+        'Credit': 'DEPOSIT AMT',
+        'Credit Amt': 'DEPOSIT AMT',
+        'Balance': 'BALANCE AMT',
+        'Closing Balance': 'BALANCE AMT',
+    }
+    # Only rename if target column doesn't already exist
+    for src, tgt in direct_map.items():
+        if src in df.columns and tgt not in df.columns:
+            df = df.rename(columns={src: tgt})
+
     # Normalize columns — strip whitespace and uppercase for matching
     df.columns = df.columns.str.strip()
     cols_upper = {c.upper().strip(): c for c in df.columns}
