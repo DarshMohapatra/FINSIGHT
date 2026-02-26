@@ -57,6 +57,8 @@ def find_transaction_header_row(df_raw):
 
 # ── Smart Column Normalizer ────────────────────────────────────
 def normalize_columns(df):
+    # Normalize columns — strip whitespace and uppercase for matching
+    df.columns = df.columns.str.strip()
     cols_upper = {c.upper().strip(): c for c in df.columns}
     date_c   = ["DATE","TRANSACTION DATE","TXN DATE","VALUE DATE","POSTING DATE","TRANS DATE","TRAN DATE","BOOK DATE","TXNDATE","VALUEDATE","TIMESTAMP","TIME STAMP","TRANSACTION TIMESTAMP"]
     detail_c = ["TRANSACTION DETAILS","NARRATION","DESCRIPTION","PARTICULARS","REMARKS","TRANSACTION NARRATION","DETAILS","TRAN PARTICULARS","CHEQUENO/NARRATION","TRAN. PARTICULAR","TRANSACTION PARTICULAR","TYPE","TRANSACTION TYPE","CATEGORY","TRANS TYPE"]
@@ -65,12 +67,18 @@ def normalize_columns(df):
     bal_c    = ["BALANCE AMT","BALANCE","CLOSING BALANCE","RUNNING BALANCE","AVAIL BAL","AVAILABLE BALANCE","BAL","BALANCE(INR)","BALANCE (INR)"]
 
     def find(cands):
+        # Exact match first
         for c in cands:
             if c in cols_upper: return cols_upper[c]
         # Partial match fallback
         for c in cands:
             for col_up, col_orig in cols_upper.items():
                 if c in col_up or col_up in c:
+                    return col_orig
+        # Last resort — check if any candidate is a substring of any column
+        for c in cands:
+            for col_up, col_orig in cols_upper.items():
+                if any(word in col_up for word in c.split()):
                     return col_orig
         return None
 
