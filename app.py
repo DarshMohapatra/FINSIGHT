@@ -115,6 +115,7 @@ def normalize_columns(df):
     return df
 
 
+
 def parse_pdf(f, pwd=""):
     import io
     if not PDF_OK:
@@ -134,7 +135,7 @@ def parse_pdf(f, pwd=""):
                 if t and len(t) > 2:
                     tables.append(t)
     if not tables:
-        raise ValueError("No tables found in PDF. Please download the digital (non-scanned) statement from NetBanking, or use CSV/Excel.")
+        raise ValueError("No tables found. Download the digital (non-scanned) statement from NetBanking, or use CSV/Excel.")
     FIN_KW = ["date","debit","credit","balance","withdrawal","deposit","narration","particulars","description","amount","dr","cr"]
     best, best_score = None, 0
     for tbl in tables:
@@ -297,11 +298,7 @@ def build_context(df):
     ctx += "IMPORTANT: Use ONLY this data. Always give specific numbers. Never say data unavailable. Be concise, friendly and actionable."
     return ctx
 
-""")
 
-#  HTML landing page
-with open('/content/app.py', 'a', encoding='utf-8') as f:
-    f.write("""
 LANDING_HTML = open('/mount/src/finsight/landing.html').read() if os.path.exists('/mount/src/finsight/landing.html') else ""
 
 if st.session_state.page == "landing":
@@ -331,7 +328,7 @@ else:
         with c1:
             st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin:28px 0 8px;">UPLOAD YOUR FILE</div>', unsafe_allow_html=True)
             st.markdown('<h3 style="font-size:24px;font-weight:700;margin-bottom:8px;">Bank Statement Analyzer</h3>', unsafe_allow_html=True)
-            st.markdown('<p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px;">Upload your bank statement — CSV, Excel, or PDF (password protected supported). Auto-detect &amp; full ML pipeline.</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px;">Upload any CSV or Excel bank statement. We auto-detect columns and run the full ML pipeline.</p>', unsafe_allow_html=True)
             uploaded = st.file_uploader("", type=["csv", "xlsx", "xls", "pdf"], label_visibility="collapsed")
             pdf_password = ""
             if uploaded and uploaded.name.lower().endswith(".pdf"):
@@ -499,170 +496,3 @@ else:
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + PROPHET + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
-""")
-
-print("app.py written:", len(open('/content/app.py').readlines()), "lines")
-
-# Landing page as a separate HTML file
-with open('/content/landing.html', 'w', encoding='utf-8') as f:
-    f.write("""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:#020408;color:#e8eaf0;font-family:'Syne',sans-serif;overflow-x:hidden;}
-.bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
-.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,245,160,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,245,160,0.03) 1px,transparent 1px);background-size:60px 60px;animation:gridMove 20s linear infinite;}
-@keyframes gridMove{0%{transform:translateY(0)}100%{transform:translateY(60px)}}
-.orb{position:absolute;border-radius:50%;filter:blur(100px);animation:orbFloat 8s ease-in-out infinite;}
-.o1{width:600px;height:600px;background:radial-gradient(circle,rgba(0,245,160,0.12),transparent 70%);top:-200px;left:-200px;}
-.o2{width:500px;height:500px;background:radial-gradient(circle,rgba(0,212,255,0.10),transparent 70%);top:20%;right:-150px;animation-delay:-3s;}
-.o3{width:400px;height:400px;background:radial-gradient(circle,rgba(123,97,255,0.10),transparent 70%);bottom:10%;left:30%;animation-delay:-6s;}
-@keyframes orbFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-30px)}}
-.wrap{max-width:1100px;margin:0 auto;padding:0 48px;position:relative;z-index:1;}
-nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:18px 0;background:rgba(2,4,8,0.8);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.06);}
-.nav-inner{max-width:1100px;margin:0 auto;padding:0 48px;display:flex;align-items:center;justify-content:space-between;}
-.logo{font-size:20px;font-weight:800;background:linear-gradient(135deg,#00f5a0,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.nav-links{display:flex;gap:28px;align-items:center;}
-.nav-links a{color:rgba(255,255,255,0.4);text-decoration:none;font-size:13px;font-family:'DM Mono',monospace;transition:color 0.2s;}
-.nav-links a:hover{color:#00f5a0;}
-.hero{min-height:100vh;display:flex;align-items:center;padding-top:80px;}
-.badge{display:inline-flex;align-items:center;gap:8px;background:rgba(0,245,160,0.08);border:1px solid rgba(0,245,160,0.2);border-radius:100px;padding:7px 16px;margin-bottom:28px;font-family:'DM Mono',monospace;font-size:11px;color:#00f5a0;letter-spacing:1px;}
-.dot{width:6px;height:6px;background:#00f5a0;border-radius:50%;animation:pulse 2s infinite;}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
-h1{font-size:clamp(52px,7vw,88px);font-weight:800;letter-spacing:-3px;line-height:1.0;margin-bottom:20px;}
-.grad{background:linear-gradient(135deg,#00f5a0,#00d4ff,#7b61ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-size:200%;animation:gradShift 3s linear infinite;}
-@keyframes gradShift{0%{background-position:0% center}100%{background-position:200% center}}
-.desc{font-size:18px;color:rgba(232,234,240,0.5);line-height:1.7;max-width:540px;margin-bottom:36px;}
-.actions{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:56px;}
-.btn{display:inline-flex;align-items:center;gap:10px;padding:16px 32px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none;transition:all 0.2s;cursor:pointer;font-family:'Syne',sans-serif;border:none;}
-.btn-p{background:linear-gradient(135deg,#00f5a0,#00d4ff);color:#000;box-shadow:0 0 40px rgba(0,245,160,0.3);}
-.btn-p:hover{transform:translateY(-2px);box-shadow:0 0 60px rgba(0,245,160,0.5);}
-.btn-s{color:rgba(232,234,240,0.5);border:1px solid rgba(255,255,255,0.08)!important;background:rgba(255,255,255,0.03);}
-.btn-s:hover{border-color:#00d4ff!important;color:#00d4ff;}
-.stats{display:flex;gap:40px;flex-wrap:wrap;}
-.stat{border-left:1px solid rgba(255,255,255,0.08);padding-left:20px;}
-.stat-num{font-size:28px;font-weight:800;background:linear-gradient(135deg,#00f5a0,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-1px;}
-.stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);font-family:'DM Mono',monospace;margin-top:4px;}
-.section{padding:100px 0;}
-.sec-label{font-family:'DM Mono',monospace;font-size:11px;color:#00f5a0;letter-spacing:3px;text-transform:uppercase;margin-bottom:14px;}
-.sec-title{font-size:clamp(36px,5vw,54px);font-weight:800;letter-spacing:-2px;line-height:1.1;margin-bottom:56px;}
-.grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;background:rgba(255,255,255,0.06);border-radius:24px;overflow:hidden;}
-.feat{background:#020408;padding:44px;transition:background 0.3s;}
-.feat:hover{background:rgba(255,255,255,0.02);}
-.ficon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:18px;}
-.ig{background:rgba(0,245,160,0.1);border:1px solid rgba(0,245,160,0.2);}
-.ir{background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.2);}
-.ib{background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);}
-.ip{background:rgba(123,97,255,0.1);border:1px solid rgba(123,97,255,0.2);}
-.fn{font-family:'DM Mono',monospace;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:2px;margin-bottom:10px;}
-.ft{font-size:20px;font-weight:700;margin-bottom:10px;letter-spacing:-0.5px;}
-.fd{font-size:14px;color:rgba(232,234,240,0.45);line-height:1.7;}
-.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px;}
-.tag{font-family:'DM Mono',monospace;font-size:10px;padding:3px 9px;border-radius:100px;border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.25);}
-.steps-wrap{max-width:660px;margin:0 auto;}
-.step{display:flex;gap:28px;padding:36px 0;border-bottom:1px solid rgba(255,255,255,0.06);}
-.step:last-child{border:none;}
-.snum{font-family:'DM Mono',monospace;font-size:48px;font-weight:300;color:rgba(255,255,255,0.05);flex-shrink:0;width:70px;text-align:right;}
-.stag{display:inline-block;font-family:'DM Mono',monospace;font-size:10px;color:#00f5a0;letter-spacing:2px;margin-bottom:8px;}
-.step h3{font-size:21px;font-weight:700;letter-spacing:-0.5px;margin-bottom:8px;}
-.step p{color:rgba(232,234,240,0.45);line-height:1.7;font-size:14px;}
-.chat-box{max-width:660px;margin:0 auto;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:24px;overflow:hidden;}
-.chat-hdr{padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px;}
-.chat-av{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#00f5a0,#00d4ff);display:flex;align-items:center;justify-content:center;font-size:16px;}
-.chat-name{font-size:14px;font-weight:600;}
-.chat-status{font-size:11px;color:#00f5a0;font-family:'DM Mono',monospace;}
-.messages{padding:22px;display:flex;flex-direction:column;gap:14px;}
-.msg{max-width:82%;}
-.msg.u{align-self:flex-end;}
-.msg.ai{align-self:flex-start;}
-.bubble{padding:13px 17px;border-radius:16px;font-size:13px;line-height:1.6;}
-.msg.u .bubble{background:linear-gradient(135deg,#00f5a0,#00d4ff);color:#000;font-weight:500;border-bottom-right-radius:4px;}
-.msg.ai .bubble{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-bottom-left-radius:4px;}
-.mt{font-size:10px;color:rgba(255,255,255,0.25);font-family:'DM Mono',monospace;margin-top:5px;padding:0 3px;}
-.msg.u .mt{text-align:right;}
-.cta-box{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:28px;padding:72px;text-align:center;position:relative;overflow:hidden;}
-.cta-glow{position:absolute;width:400px;height:400px;background:radial-gradient(circle,rgba(0,245,160,0.07),transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
-.reveal{opacity:0;transform:translateY(30px);transition:all 0.7s ease;}
-.reveal.on{opacity:1;transform:translateY(0);}
-@keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
-.anim{animation:fadeUp 0.6s ease both;}
-</style>
-</head>
-<body>
-<div class="bg"><div class="grid"></div><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
-<nav><div class="nav-inner">
-  <div class="logo">⚡FinSight</div>
-  <div class="nav-links"><a href="#features">Features</a><a href="#how">How it works</a><a href="#chat">AI Advisor</a></div>
-</div></nav>
-<section class="hero"><div class="wrap">
-  <div class="badge anim"><div class="dot"></div> POWERED BY LLAMA 3.3 + ISOLATION FOREST</div>
-  <h1 class="anim" style="animation-delay:0.1s">Your Money,<br><span class="grad">Understood.</span></h1>
-  <p class="desc anim" style="animation-delay:0.2s">Upload your bank statement. FinSight reads every transaction, flags anomalies, forecasts your future, and gives you a personal AI advisor — in seconds.</p>
-  <div class="actions anim" style="animation-delay:0.3s">
-    <a href="#cta" class="btn btn-p">⚡ Analyze My Finances</a>
-    <a href="#features" class="btn btn-s">→ See How It Works</a>
-  </div>
-  <div class="stats anim" style="animation-delay:0.4s">
-    <div class="stat"><div class="stat-num" data-target="113">0</div><div class="stat-lbl">K+ TRANSACTIONS ANALYZED</div></div>
-    <div class="stat"><div class="stat-num" data-target="78">0</div><div class="stat-lbl">% AUTO-CATEGORIZED</div></div>
-    <div class="stat"><div class="stat-num" data-target="2275">0</div><div class="stat-lbl">ANOMALIES FLAGGED</div></div>
-  </div>
-</div></section>
-<section class="section" id="features"><div class="wrap">
-  <div class="sec-label reveal">CAPABILITIES</div>
-  <h2 class="sec-title reveal">Four AI engines.<br><span class="grad">One platform.</span></h2>
-  <div class="grid4 reveal">
-    <div class="feat"><div class="ficon ig">🧠</div><div class="fn">01 / 04</div><div class="ft">NLP Transaction Categorizer</div><div class="fd">Every transaction auto-labeled using keyword-aware NLP. 78.4% coverage out of the box.</div><div class="tags"><span class="tag">NLP</span><span class="tag">KEYWORD MATCHING</span><span class="tag">AUTO-LABEL</span></div></div>
-    <div class="feat"><div class="ficon ir">🚨</div><div class="fn">02 / 04</div><div class="ft">Anomaly Detection Engine</div><div class="fd">Isolation Forest ML model scans every transaction and flags suspicious patterns — unusual amounts, timing spikes.</div><div class="tags"><span class="tag">ISOLATION FOREST</span><span class="tag">SKLEARN</span><span class="tag">REAL-TIME</span></div></div>
-    <div class="feat"><div class="ficon ib">📈</div><div class="fn">03 / 04</div><div class="ft">Expense Forecasting</div><div class="fd">Facebook Prophet predicts your next 6 months of spending with confidence intervals.</div><div class="tags"><span class="tag">PROPHET</span><span class="tag">TIME SERIES</span><span class="tag">6-MONTH</span></div></div>
-    <div class="feat"><div class="ficon ip">🤖</div><div class="fn">04 / 04</div><div class="ft">AI Financial Advisor</div><div class="fd">Powered by LLaMA 3.3 70B. Knows your actual data. Gives personalized, data-backed advice.</div><div class="tags"><span class="tag">LLAMA 3.3</span><span class="tag">GROQ API</span><span class="tag">RAG</span></div></div>
-  </div>
-</div></section>
-<section class="section" id="how"><div class="wrap">
-  <div class="sec-label reveal" style="text-align:center">PROCESS</div>
-  <h2 class="sec-title reveal" style="text-align:center">From statement<br><span class="grad">to insight.</span></h2>
-  <div class="steps-wrap">
-    <div class="step reveal"><div class="snum">01</div><div><div class="stag">UPLOAD</div><h3>Drop your bank statement</h3><p>Upload a CSV or Excel file. Smart parser handles any format automatically.</p></div></div>
-    <div class="step reveal"><div class="snum">02</div><div><div class="stag">ANALYZE</div><h3>AI reads every transaction</h3><p>NLP categorizer, Isolation Forest, and Prophet all run in parallel on your data.</p></div></div>
-    <div class="step reveal"><div class="snum">03</div><div><div class="stag">VISUALIZE</div><h3>Your financial story, visualized</h3><p>Dark dashboard with spending trends, categories, anomaly timeline, and forecast.</p></div></div>
-    <div class="step reveal"><div class="snum">04</div><div><div class="stag">CHAT</div><h3>Ask anything about your money</h3><p>FinSight knows your real data and gives honest, personalized answers.</p></div></div>
-  </div>
-</div></section>
-<section class="section" id="chat"><div class="wrap">
-  <div class="sec-label reveal" style="text-align:center">AI FINANCIAL ADVISOR</div>
-  <h2 class="sec-title reveal" style="text-align:center">Talk to your<br><span class="grad">financial data.</span></h2>
-  <div class="chat-box reveal">
-    <div class="chat-hdr"><div class="chat-av">💡</div><div><div class="chat-name">FinSight AI</div><div class="chat-status"><span style="display:inline-block;width:6px;height:6px;background:#00f5a0;border-radius:50%;margin-right:6px;animation:pulse 2s infinite;"></span>Analyzing your data</div></div></div>
-    <div class="messages">
-      <div class="msg u"><div class="bubble">What is my biggest spending category?</div><div class="mt">Just now</div></div>
-      <div class="msg ai"><div class="bubble">Your biggest category is <strong>Online Payment</strong> at Rs.11,025Cr — 46% of total. Review recurring NEFT transfers to find savings. 💡</div><div class="mt">FinSight AI</div></div>
-      <div class="msg u"><div class="bubble">Give me 3 tips to reduce my spending!</div><div class="mt">Just now</div></div>
-      <div class="msg ai"><div class="bubble">Based on your real data:<br><br>1. Monitor Online Payments — Rs.11,025Cr. Review recurring transfers.<br>2. Consolidate Accounts — Rs.4,248Cr in transfers.<br>3. Break down Other — Rs.1,504Cr untracked. Find hidden leaks.</div><div class="mt">FinSight AI</div></div>
-    </div>
-  </div>
-</div></section>
-<section class="section" id="cta"><div class="wrap">
-  <div class="cta-box reveal">
-    <div class="cta-glow"></div>
-    <div class="sec-label">GET STARTED FREE</div>
-    <h2 class="sec-title" style="margin-bottom:16px;">Your finances deserve<br><span class="grad">real intelligence.</span></h2>
-    <p style="font-size:17px;color:rgba(232,234,240,0.45);margin-bottom:40px;line-height:1.7;">Get your complete AI-powered financial analysis in under 60 seconds.</p>
-  </div>
-</div></section>
-<div style="border-top:1px solid rgba(255,255,255,0.06);padding:28px 0;position:relative;z-index:1;">
-<div class="wrap" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
-  <div style="font-size:18px;font-weight:800;background:linear-gradient(135deg,#00f5a0,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">⚡FinSight</div>
-  <div style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.2);">ISOLATION FOREST + PROPHET + LLAMA 3.3 70B</div>
-  <a href="https://github.com/DarshMohapatra/FINSIGHT" style="font-family:DM Mono,monospace;font-size:11px;color:rgba(255,255,255,0.3);text-decoration:none;" target="_blank">GitHub</a>
-</div></div>
-<script>
-const reveals = document.querySelectorAll(".reveal");
-const obs = new IntersectionObserver(entries=>{entries.forEach((e,i)=>{if(e.isIntersecting)setTimeout(()=>e.target.classList.add("on"),i*80);});},{threshold:0.1});
-reveals.forEach(r=>obs.observe(r));
-function animCount(el,target){let s=0;const step=ts=>{if(!s)s=ts;const p=Math.min((ts-s)/2000,1);const e=1-Math.pow(1-p,3);el.textContent=Math.floor(e*target).toLocaleString();if(p<1)requestAnimationFrame(step);};requestAnimationFrame(step);}
-setTimeout(()=>{document.querySelectorAll("[data-target]").forEach(n=>animCount(n,parseInt(n.dataset.target)));},500);
-</script>
-</body></html>
