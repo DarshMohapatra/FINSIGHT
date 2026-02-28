@@ -224,66 +224,83 @@ def _looks_like_date_value(val):
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Definitive multi-page PDF extractor using pdfplumber's "lines" strategy.
+    Multi-strategy PDF extractor — runs all strategies, picks the one
+    that returns the most columns (= most complete table structure).
+    Critical for capturing PARTICULARS/narration alongside DATE + amounts.
 
-    Key insight: bank statement PDFs have actual visible border lines between
-    cells. Using vertical_strategy="lines" + horizontal_strategy="lines" tells
-    pdfplumber to use those borders as cell boundaries. Result:
-      - Empty cells are preserved as None (not dropped)
-      - No value shifting into wrong columns
-      - Multi-line cell text is joined within the correct cell
-      - Works across all 40+ pages
-
-    Fallback: if "lines" strategy finds nothing, try "text" strategy.
+    Strategy priority:
+      1. lines       — uses drawn borders (fast, clean but may miss cols)
+      2. lines+text  — hybrid: vertical from lines, horizontal from text
+      3. text        — pure text-gap detection (catches all columns)
+      4. explicit    — bbox word-based with locked x-boundaries (last resort)
     """
     import pdfplumber
+    import io
 
     open_kwargs = {"password": password} if password else {}
 
-    # Settings that use actual PDF line art for cell detection
-    LINES_SETTINGS = {
-        "vertical_strategy":   "lines",
-        "horizontal_strategy": "lines",
-        "snap_tolerance":      3,
-        "join_tolerance":      3,
-        "edge_min_length":     3,
-        "intersection_tolerance": 3,
-    }
-    # Fallback if no line art detected
-    TEXT_SETTINGS = {
-        "vertical_strategy":   "text",
-        "horizontal_strategy": "lines",
-        "snap_tolerance":      5,
-        "join_tolerance":      5,
-    }
+    TABLE_SETTINGS = [
+        # name, settings dict
+        ("lines", {
+            "vertical_strategy": "lines",
+            "horizontal_strategy": "lines",
+            "snap_tolerance": 3,
+            "join_tolerance": 3,
+            "edge_min_length": 3,
+            "intersection_tolerance": 3,
+        }),
+        ("lines+text", {
+            "vertical_strategy": "lines",
+            "horizontal_strategy": "text",
+            "snap_tolerance": 3,
+            "join_tolerance": 3,
+        }),
+        ("text", {
+            "vertical_strategy": "text",
+            "horizontal_strategy": "lines",
+            "snap_tolerance": 5,
+            "join_tolerance": 5,
+            "min_words_vertical": 2,
+        }),
+        ("text+text", {
+            "vertical_strategy": "text",
+            "horizontal_strategy": "text",
+            "snap_tolerance": 5,
+            "join_tolerance": 5,
+            "min_words_vertical": 2,
+            "min_words_horizontal": 1,
+        }),
+    ]
 
-    def try_extract(pdf, settings):
-        """Extract all tables from all pages with given settings."""
+    def extract_with_settings(pdf, settings):
+        """Extract all pages with given settings, return (headers, rows) or (None, [])."""
         all_header = None
         all_rows   = []
-        header_set = None   # lowercase set of header values for dedup
+        header_set = None
 
         for page in pdf.pages:
-            tables = page.extract_tables(settings)
+            try:
+                tables = page.extract_tables(settings)
+            except Exception:
+                continue
+
             for tbl in (tables or []):
                 if not tbl or len(tbl) < 2:
                     continue
 
-                # Find the header row (first row containing a date keyword)
+                # Find header row
                 header_idx = None
                 for i, row in enumerate(tbl[:8]):
                     row_str = [str(c or "").strip() for c in row]
                     if any(_looks_like_date_header(c) for c in row_str):
                         header_idx = i
                         break
-
                 if header_idx is None:
-                    continue    # no header found in this table — skip
+                    continue
 
                 # Lock header on first encounter
                 if all_header is None:
                     raw_h = [str(c or "").strip() for c in tbl[header_idx]]
-                    # Clean duplicate/empty names
                     seen, clean = {}, []
                     for h in raw_h:
                         h = h or "COL"
@@ -296,17 +313,15 @@ def extract_df_from_pdf(pdf_path, password=None):
                     all_header = clean
                     header_set = set(v.lower() for v in raw_h if v.strip())
 
-                # Collect data rows (skip repeated header rows)
+                # Collect data rows
                 for row in tbl[header_idx + 1:]:
                     cells = [str(c or "").strip() for c in row]
-                    # Skip blank rows
                     if not any(c for c in cells):
                         continue
-                    # Skip rows that look like a repeated header
+                    # Skip repeated header rows
                     row_lower = set(c.lower() for c in cells if c)
                     if header_set and len(row_lower & header_set) >= 2:
                         continue
-                    # Pad/trim to match header length
                     while len(cells) < len(all_header):
                         cells.append("")
                     cells = cells[:len(all_header)]
@@ -314,26 +329,42 @@ def extract_df_from_pdf(pdf_path, password=None):
 
         return all_header, all_rows
 
+    best_headers = None
+    best_rows    = []
+    best_ncols   = 0
+
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
-        # Try lines strategy first (works when PDF has visible borders)
-        headers, rows = try_extract(pdf, LINES_SETTINGS)
+        for strategy_name, settings in TABLE_SETTINGS:
+            headers, rows = extract_with_settings(pdf, settings)
+            if headers and rows:
+                ncols = len(headers)
+                nrows = len(rows)
+                print(f"  Strategy '{strategy_name}': {ncols} cols × {nrows} rows")
+                # Prefer strategy with most columns; break ties by row count
+                if ncols > best_ncols or (ncols == best_ncols and nrows > len(best_rows)):
+                    best_ncols   = ncols
+                    best_headers = headers
+                    best_rows    = rows
+                # Stop early if we have 5+ columns with good row count
+                if ncols >= 5 and nrows >= 10:
+                    print(f"  ✓ Using '{strategy_name}' (5+ cols, sufficient rows)")
+                    break
 
-        # Fall back to text strategy if lines didn't work
-        if not rows:
-            headers, rows = try_extract(pdf, TEXT_SETTINGS)
-
-    if not rows or headers is None:
+    if not best_rows or best_headers is None:
         raise ValueError(
             "Could not extract a transaction table from this PDF. "
             "Please try uploading a CSV or Excel version instead."
         )
 
-    df = pd.DataFrame(rows, columns=headers)
+    print(f"  Final: {len(best_headers)} cols × {len(best_rows)} rows")
+    print(f"  Columns: {best_headers}")
+
+    df = pd.DataFrame(best_rows, columns=best_headers)
     df = df.dropna(how="all")
     df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
     df = df.reset_index(drop=True)
 
-    # Regex fallback: detect date column by value pattern if header didn't match
+    # Regex fallback: detect date column by value pattern
     if not any(_looks_like_date_header(c) for c in df.columns):
         for col in df.columns:
             hits = df[col].dropna().astype(str).head(20).apply(
