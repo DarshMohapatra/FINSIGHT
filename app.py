@@ -250,7 +250,7 @@ def extract_df_from_pdf(pdf_path, password=None):
 
 def process_file(uploaded, pdf_password=""):
     if uploaded.name.lower().endswith(".pdf"):
-        df = parse_pdf(uploaded, pdf_password)
+        df = extract_df_from_pdf(uploaded, pdf_password)
         try: df = normalize_columns(df)
         except: pass
     elif uploaded.name.lower().endswith(".csv"):
@@ -342,7 +342,38 @@ def build_context(df):
     return ctx
 
 
-LANDING_HTML = open('/mount/src/finsight/landing.html').read() if os.path.exists('/mount/src/finsight/landing.html') else ""
+# ── Landing HTML with blank-screen fallback (Fix B) ──────────
+_landing_path = '/mount/src/finsight/landing.html'
+if os.path.exists(_landing_path):
+    LANDING_HTML = open(_landing_path).read()
+else:
+    # Fallback: show a minimal launch page instead of blank screen
+    LANDING_HTML = """<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body{margin:0;background:#020408;display:flex;align-items:center;
+       justify-content:center;min-height:100vh;font-family:sans-serif;}
+  .box{text-align:center;color:#e8eaf0;}
+  h1{font-size:48px;background:linear-gradient(135deg,#00f5a0,#00d4ff);
+     -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  p{color:rgba(255,255,255,0.4);margin:12px 0 32px;}
+  button{background:linear-gradient(135deg,#00f5a0,#00d4ff);border:none;
+         color:#000;font-weight:700;padding:14px 36px;border-radius:10px;
+         font-size:15px;cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>⚡ FinSight</h1>
+  <p>AI-powered bank statement analysis</p>
+  <button onclick="window.parent.postMessage({type:'finsight_launch'},'*')">
+    ⚡ Launch App
+  </button>
+</div>
+</body>
+</html>"""
+
 
 if st.session_state.page == "landing":
     components.html(LANDING_HTML, height=2400, scrolling=True)
