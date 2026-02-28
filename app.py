@@ -260,83 +260,113 @@ def _score_table(rows):
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Robustly extract a transaction DataFrame from a bank statement PDF.
-    Strategy:
-      1. Extract ALL tables across ALL pages
-      2. Score each table and pick the best candidate
-      3. Scan the first 10 rows to find the real header row
-      4. If no header found via keywords, use regex on values to detect date column
+    Extract transaction table from a bank statement PDF.
+    Handles ICICI, HDFC, Axis, SBI multi-page statements.
     """
     import pdfplumber
+    import pandas as pd
+    import re as _re
 
-    all_tables = []
+    # Matches DD-MM-YYYY, YYYY-MM-DD, DD/MM/YYYY, DD/MM/YY
+    DATE_RE = _re.compile(
+        r'(\d{2}-\d{2}-\d{4}|\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}|\d{2}/\d{2}/\d{2})'
+    )
+
+    def has_date_value(table):
+        """Return True if any cell in first 5 rows matches a date pattern."""
+        for row in table[:5]:
+            for cell in row:
+                if cell and DATE_RE.search(str(cell)):
+                    return True
+        return False
 
     open_kwargs = {"password": password} if password else {}
+
+    header      = None
+    n_cols      = None
+    all_rows    = []
+    locked      = False   # True once we've found the transactions table
+
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
-        for page_num, page in enumerate(pdf.pages):
-            tables = page.extract_tables()
-            for tbl in tables:
-                if tbl and len(tbl) > 1:
-                    all_tables.append((page_num, tbl))
+        for page in pdf.pages:
+            for tbl in (page.extract_tables() or []):
+                if not tbl or len(tbl) < 2:
+                    continue
 
-    if not all_tables:
-        raise ValueError("No tables found in PDF. Try uploading a CSV/Excel version.")
+                if not locked:
+                    # Skip tables without date values — they're cover/summary tables
+                    if not has_date_value(tbl):
+                        continue
 
-    # Pick the best table by score
-    best_page, best_table = max(all_tables, key=lambda x: _score_table(x[1]))
+                    # Found the transactions table — lock onto it
+                    locked = True
+                    n_cols = max(len(r) for r in tbl)
 
-    # ── Find the real header row ──────────────────────────────────
-    header_idx = None
-    for i, row in enumerate(best_table[:10]):
-        row_str = [str(c or "").strip() for c in row]
-        if any(_looks_like_date_header(c) for c in row_str):
-            header_idx = i
-            break
+                    # Determine header: first row without a date value = header row
+                    start = 0
+                    first_row = [str(c or '').strip() for c in tbl[0]]
+                    if not any(DATE_RE.search(c) for c in first_row):
+                        header = first_row
+                        start  = 1
+                    else:
+                        header = [f'COL_{i}' for i in range(n_cols)]
 
-    if header_idx is not None:
-        headers = [str(c or "").strip() for c in best_table[header_idx]]
-        data_rows = best_table[header_idx + 1:]
-    else:
-        # Fallback: use row 0 as header and try to fix column names later
-        headers = [str(c or "").strip() for c in best_table[0]]
-        data_rows = best_table[1:]
+                    for row in tbl[start:]:
+                        cells = [str(c or '').strip() for c in row]
+                        if any(cells):
+                            all_rows.append(cells)
 
-    # Clean empty headers
-    seen = {}
-    clean_headers = []
-    for h in headers:
-        if not h:
-            h = "COL"
-        if h in seen:
-            seen[h] += 1
-            h = f"{h}_{seen[h]}"
-        else:
-            seen[h] = 0
-        clean_headers.append(h)
+                else:
+                    # Already locked — collect rows from matching tables on later pages
+                    # Skip if column count is wildly different (it's a different table)
+                    tbl_cols = max(len(r) for r in tbl)
+                    if abs(tbl_cols - n_cols) > 2:
+                        continue
 
-    df = pd.DataFrame(data_rows, columns=clean_headers)
-    # Drop fully-empty rows
-    df.columns = [str(c).strip().upper().replace("\n", " ").replace("\r", "").strip() for c in df.columns]  # normalize PDF headers
-    df = df.dropna(how="all")
-    # Strip repeated PDF header rows (ICICI prints header on every page)
-    if "DATE" in df.columns:
-        df = df[df["DATE"].astype(str).str.strip().str.upper() != "DATE"]
+                    # Skip repeated header rows
+                    start = 0
+                    first_row = [str(c or '').strip() for c in tbl[0]]
+                    if not any(DATE_RE.search(c) for c in first_row):
+                        start = 1  # no dates = header row, skip it
+
+                    for row in tbl[start:]:
+                        cells = [str(c or '').strip() for c in row]
+                        if any(cells):
+                            all_rows.append(cells)
+
+    if not locked or not all_rows:
+        raise ValueError(
+            'No transaction table found in this PDF. '
+            'Make sure it is a bank statement with a Date/Amount table.'
+        )
+
+    # Pad/trim all rows to same column count
+    padded = []
+    for row in all_rows:
+        if len(row) < n_cols:
+            row = row + [''] * (n_cols - len(row))
+        padded.append(row[:n_cols])
+
+    if len(header) < n_cols:
+        header = header + [f'COL_{i}' for i in range(len(header), n_cols)]
+    header = header[:n_cols]
+
+    df = pd.DataFrame(padded, columns=header)
+
+    # Drop fully empty rows
+    df = df.replace('', float('nan'))
+    df = df.dropna(how='all')
+    df = df.fillna('')
     df = df.reset_index(drop=True)
-    df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
+
+    # Remove repeated header rows (ICICI prints header on every page)
+    first_col = df.columns[0]
+    df = df[df[first_col].astype(str).str.strip() != str(first_col).strip()]
     df = df.reset_index(drop=True)
 
-    # ── Regex fallback: if no DATE column detected yet, scan values ──
-    date_col_found = any(_looks_like_date_header(c) for c in df.columns)
-    if not date_col_found:
-        for col in df.columns:
-            sample = df[col].dropna().astype(str).head(10)
-            date_matches = sample.apply(_looks_like_date_value).sum()
-            if date_matches >= 2:
-                df = df.rename(columns={col: "Date"})
-                break
-
+    df = normalize_columns(df)
     return df
-# ══════════════════════════════════════════════════════════════════
+
 
 def process_file(uploaded, pdf_password=""):
     if uploaded.name.lower().endswith(".pdf"):
