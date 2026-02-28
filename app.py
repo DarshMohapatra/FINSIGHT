@@ -8,6 +8,11 @@ import os
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from groq import Groq
+try:
+    import pdfplumber
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
 
 st.set_page_config(page_title="FinSight", page_icon="⚡", layout="wide", initial_sidebar_state="collapsed")
 
@@ -110,9 +115,242 @@ def normalize_columns(df):
     return df
 
 
-def process_file(uploaded):
-    df = pd.read_csv(uploaded) if uploaded.name.endswith(".csv") else pd.read_excel(uploaded)
-    df = normalize_columns(df)
+
+# ─── Bank-specific PDF column patterns ───────────────────────────────────────
+BANK_PATTERNS = {
+    "SBI": {
+        "date": ["Txn Date", "Date"],
+        "details": ["Description", "Particulars", "Narration"],
+        "debit": ["Debit", "Withdrawal Amt", "Dr"],
+        "credit": ["Credit", "Deposit Amt", "Cr"],
+        "balance": ["Balance", "Balance Amt"],
+    },
+    "HDFC": {
+        "date": ["Date", "Value Dt"],
+        "details": ["Narration", "Description", "Particulars"],
+        "debit": ["Withdrawal Amt (Dr)", "Debit", "Dr"],
+        "credit": ["Deposit Amt (Cr)", "Credit", "Cr"],
+        "balance": ["Closing Balance", "Balance"],
+    },
+    "ICICI": {
+        "date": ["Transaction Date", "Txn Date", "Date"],
+        "details": ["Transaction Remarks", "Particulars", "Description"],
+        "debit": ["Withdrawal Amount (INR )", "Debit", "Dr Amount"],
+        "credit": ["Deposit Amount (INR )", "Credit", "Cr Amount"],
+        "balance": ["Balance (INR )", "Balance"],
+    },
+    "AXIS": {
+        "date": ["Tran Date", "Trans Date", "Date"],
+        "details": ["Particulars", "Description", "Narration"],
+        "debit": ["Dr", "Debit", "Withdrawal"],
+        "credit": ["Cr", "Credit", "Deposit"],
+        "balance": ["Balance", "Bal"],
+    },
+    "KOTAK": {
+        "date": ["Transaction Date", "Date"],
+        "details": ["Description", "Narration", "Particulars"],
+        "debit": ["Debit", "Dr"],
+        "credit": ["Credit", "Cr"],
+        "balance": ["Balance"],
+    },
+}
+
+def _clean_amount(val):
+    """Convert messy amount strings like 1,23,456.78 or (500.00) to float."""
+    if val is None or str(val).strip() in ["", "-", "None"]:
+        return 0.0
+    s = str(val).strip().replace(",", "").replace(" ", "")
+    negative = s.startswith("(") and s.endswith(")")
+    s = s.strip("()").replace("Dr", "").replace("Cr", "").strip()
+    try:
+        result = float(s)
+        return -result if negative else result
+    except:
+        return 0.0
+
+def _find_col(df_cols, candidates):
+    """Case-insensitive column finder."""
+    cols_upper = {c.upper().strip(): c for c in df_cols}
+    for cand in candidates:
+        key = cand.upper().strip()
+        if key in cols_upper:
+            return cols_upper[key]
+        # partial match
+        for cu, co in cols_upper.items():
+            if key in cu or cu in key:
+                return co
+    return None
+
+def parse_pdf(uploaded_file, password=""):
+    """
+    Extract transactions from a password-protected or open PDF bank statement.
+    Supports SBI, HDFC, ICICI, Axis, Kotak and most other Indian banks.
+    Returns a DataFrame with standard columns ready for process_file().
+    """
+    if not PDF_SUPPORT:
+        raise ValueError("pdfplumber not installed. Please check requirements.txt.")
+
+    import io
+    pdf_bytes = uploaded_file.read()
+    uploaded_file.seek(0)  # reset for any future reads
+
+    # ── Try opening (with or without password) ────────────────────────────
+    open_kwargs = {"password": password} if password.strip() else {}
+    try:
+        pdf = pdfplumber.open(io.BytesIO(pdf_bytes), **open_kwargs)
+    except Exception as e:
+        err = str(e).lower()
+        if "password" in err or "encrypt" in err or "incorrect" in err:
+            raise ValueError("❌ Wrong password or file is encrypted. Please enter the correct password.")
+        raise ValueError(f"❌ Could not open PDF: {e}")
+
+    # ── Extract all tables from all pages ─────────────────────────────────
+    all_tables = []
+    with pdf:
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            for t in tables:
+                if t and len(t) > 1:  # need at least header + 1 row
+                    all_tables.append(t)
+
+    if not all_tables:
+        raise ValueError(
+            "❌ No tables found in this PDF. The bank statement may be scanned/image-based. "
+            "Please download the digital (non-scanned) version from NetBanking, or use CSV/Excel."
+        )
+
+    # ── Find the transaction table (largest table with financial columns) ──
+    best_df = None
+    best_score = 0
+
+    FINANCIAL_KEYWORDS = ["date", "amount", "debit", "credit", "balance",
+                          "withdrawal", "deposit", "narration", "particulars",
+                          "description", "transaction", "dr", "cr"]
+
+    for table in all_tables:
+        # Use first non-empty row as header
+        header_row_idx = 0
+        for i, row in enumerate(table):
+            if row and any(cell and str(cell).strip() for cell in row):
+                header_row_idx = i
+                break
+
+        headers = [str(c).strip() if c else f"col_{j}"
+                   for j, c in enumerate(table[header_row_idx])]
+        data_rows = table[header_row_idx + 1:]
+
+        if len(data_rows) < 2:
+            continue
+
+        # Score: how many headers match financial keywords
+        score = sum(1 for h in headers
+                    if any(kw in h.lower() for kw in FINANCIAL_KEYWORDS))
+        score += len(data_rows) * 0.1  # prefer larger tables
+
+        if score > best_score:
+            best_score = score
+            try:
+                best_df = pd.DataFrame(data_rows, columns=headers)
+            except Exception:
+                continue
+
+    if best_df is None or best_df.empty:
+        raise ValueError("❌ Found tables but could not identify transaction data. Try CSV/Excel format.")
+
+    # ── Drop fully empty rows and columns ─────────────────────────────────
+    best_df = best_df.dropna(how="all").reset_index(drop=True)
+    best_df = best_df.loc[:, best_df.notna().any()]
+
+    # ── Try to map columns using bank patterns, then fall back to generic ──
+    headers_upper = {h.upper().strip(): h for h in best_df.columns}
+
+    date_col    = _find_col(best_df.columns, ["Date", "Txn Date", "Transaction Date",
+                                               "Tran Date", "Trans Date", "Value Date", "Timestamp"])
+    detail_col  = _find_col(best_df.columns, ["Narration", "Description", "Particulars",
+                                               "Transaction Remarks", "Remarks", "Details",
+                                               "Transaction Details"])
+    debit_col   = _find_col(best_df.columns, ["Withdrawal Amt (Dr)", "Withdrawal Amt",
+                                               "Withdrawal", "Debit", "Dr", "Dr Amount",
+                                               "Debit Amount", "Amount Debited"])
+    credit_col  = _find_col(best_df.columns, ["Deposit Amt (Cr)", "Deposit Amt",
+                                               "Deposit", "Credit", "Cr", "Cr Amount",
+                                               "Credit Amount", "Amount Credited"])
+    balance_col = _find_col(best_df.columns, ["Balance", "Closing Balance", "Balance Amt",
+                                               "Running Balance", "Bal"])
+
+    # ── Special: some banks use single "Amount" + "Dr/Cr" type column ─────
+    amount_col = _find_col(best_df.columns, ["Amount", "Transaction Amount"])
+    type_col   = _find_col(best_df.columns, ["Type", "Cr/Dr", "Dr/Cr", "Txn Type", "Trans Type"])
+
+    missing = []
+    if not date_col:    missing.append("Date")
+    if not detail_col:  missing.append("Description/Narration")
+    if not date_col or not (debit_col or credit_col or amount_col):
+        raise ValueError(
+            f"❌ Could not identify required columns in this PDF. "
+            f"Missing: {missing}. "
+            f"Columns found: {list(best_df.columns)}. "
+            f"Please use CSV/Excel instead."
+        )
+
+    # ── Build standardized DataFrame ───────────────────────────────────────
+    result = pd.DataFrame()
+    result["DATE"] = best_df[date_col]
+
+    if detail_col:
+        result["TRANSACTION DETAILS"] = best_df[detail_col].fillna("").astype(str)
+    else:
+        result["TRANSACTION DETAILS"] = "TRANSACTION"
+
+    if debit_col and credit_col:
+        result["WITHDRAWAL AMT"] = best_df[debit_col].apply(_clean_amount)
+        result["DEPOSIT AMT"]    = best_df[credit_col].apply(_clean_amount)
+    elif amount_col and type_col:
+        # Single amount column with type indicator
+        amounts = best_df[amount_col].apply(_clean_amount)
+        types   = best_df[type_col].astype(str).str.upper()
+        result["WITHDRAWAL AMT"] = amounts.where(types.str.contains("DR|DEBIT|D"), 0)
+        result["DEPOSIT AMT"]    = amounts.where(types.str.contains("CR|CREDIT|C"), 0)
+    elif amount_col:
+        # Try to infer from sign (negative = debit)
+        amounts = best_df[amount_col].apply(_clean_amount)
+        result["WITHDRAWAL AMT"] = amounts.apply(lambda x: abs(x) if x < 0 else 0)
+        result["DEPOSIT AMT"]    = amounts.apply(lambda x: x if x > 0 else 0)
+    else:
+        result["WITHDRAWAL AMT"] = 0
+        result["DEPOSIT AMT"]    = 0
+
+    if balance_col:
+        result["BALANCE AMT"] = best_df[balance_col].apply(_clean_amount)
+    else:
+        result["BALANCE AMT"] = 0
+
+    # ── Remove header repetition rows (banks repeat headers mid-PDF) ───────
+    result = result[result["DATE"].astype(str).str.strip().str.lower() != "date"]
+    result = result[~result["DATE"].astype(str).str.strip().str.lower().isin(
+        ["date", "txn date", "transaction date", "tran date", "value date", ""]
+    )]
+
+    if result.empty:
+        raise ValueError("❌ PDF parsed but no valid transaction rows found after cleaning.")
+
+    return result
+
+
+def process_file(uploaded, pdf_password=''):
+    if uploaded.name.lower().endswith(".pdf"):
+        df = parse_pdf(uploaded, pdf_password)
+        # PDF parser already returns standardized columns — run normalize anyway for safety
+        try:
+            df = normalize_columns(df)
+        except Exception:
+            pass  # columns already normalized by parse_pdf
+    elif uploaded.name.endswith(".csv"):
+        df = pd.read_csv(uploaded)
+        df = normalize_columns(df)
+    else:
+        df = pd.read_excel(uploaded)
+        df = normalize_columns(df)
     df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
     df["WITHDRAWAL AMT"] = pd.to_numeric(df["WITHDRAWAL AMT"], errors="coerce").fillna(0)
     df["DEPOSIT AMT"]    = pd.to_numeric(df["DEPOSIT AMT"],    errors="coerce").fillna(0)
@@ -224,13 +462,23 @@ else:
         with c1:
             st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin:28px 0 8px;">UPLOAD YOUR FILE</div>', unsafe_allow_html=True)
             st.markdown('<h3 style="font-size:24px;font-weight:700;margin-bottom:8px;">Bank Statement Analyzer</h3>', unsafe_allow_html=True)
-            st.markdown('<p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px;">Upload any CSV or Excel bank statement. We auto-detect columns and run the full ML pipeline.</p>', unsafe_allow_html=True)
-            uploaded = st.file_uploader("", type=["csv", "xlsx", "xls"], label_visibility="collapsed")
+            st.markdown('<p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px;">Upload your bank statement — CSV, Excel, or PDF (password-protected supported). We auto-detect columns and run the full ML pipeline.</p>', unsafe_allow_html=True)
+            uploaded = st.file_uploader("", type=["csv", "xlsx", "xls", "pdf"], label_visibility="collapsed")
+            pdf_password = ""
+            if uploaded and uploaded.name.lower().endswith(".pdf"):
+                st.markdown('<div style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:1px;margin:10px 0 4px;">PDF PASSWORD (if protected)</div>', unsafe_allow_html=True)
+                pdf_password = st.text_input("",
+                    placeholder="e.g. PAN number, DOB (DDMMYYYY), or account number",
+                    type="password",
+                    label_visibility="collapsed",
+                    help="Most Indian bank PDFs are protected. Common passwords: PAN number, Date of Birth (DDMMYYYY), first 4 letters of name + DOB"
+                )
+                st.markdown('<div style="font-size:11px;color:rgba(255,255,255,0.2);font-family:DM Mono,monospace;margin-bottom:10px;">💡 Leave blank if not password protected</div>', unsafe_allow_html=True)
             if uploaded:
                 if st.button("⚡ Run Analysis", use_container_width=True):
                     with st.spinner("Running ML pipeline..."):
                         try:
-                            df = process_file(uploaded)
+                            df = process_file(uploaded, pdf_password)
                             st.session_state.user_df = df
                             st.session_state.analysis_done = True
                             st.success("✅ Analysis complete! Found " + str(len(df)) + " transactions.")
