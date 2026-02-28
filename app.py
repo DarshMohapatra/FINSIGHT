@@ -260,80 +260,106 @@ def _score_table(rows):
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Extract transactions from ICICI bank statement PDFs using text parsing.
-    pdfplumber extract_tables() only returns the header row (1 row/page).
-    The actual transaction data is plain text — parsed here with regex.
+    Bbox-anchored PDF extraction — preserves empty cells so values
+    don't shift left into the wrong column (the root cause of
+    WITHDRAWAL AMT always showing 0).
     """
     import pdfplumber
-    import pandas as pd
-    import re as _re
-
-    # Transaction lines start with DD-MM-YYYY
-    DATE_START = _re.compile(r"^(\d{2}-\d{2}-\d{4})")
-    # Indian currency amounts: 1,23,456.78 or 294.00
-    AMT = _re.compile(r"[\d,]+\.\d{2}")
 
     open_kwargs = {"password": password} if password else {}
-    rows = []
+    all_tables  = []  # list of (page_num, col_names, rows)
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if not text:
-                continue
-            for raw_line in text.splitlines():
-                line = raw_line.strip()
-                if not DATE_START.match(line):
-                    continue          # not a transaction line
-                amounts = AMT.findall(line)
-                if len(amounts) < 2:
-                    continue          # need at least one amount + balance
+        for page_num, page in enumerate(pdf.pages):
+            words = page.extract_words()
 
-                date      = line[:10]
-                balance   = amounts[-1]
-                # Narration = everything between date and first amount
-                first_pos = line.index(amounts[0])
-                narration = line[10:first_pos].strip()
+            # ── Try bbox-anchored extraction ──────────────────────
+            header_y = None
+            for w in words:
+                if _looks_like_date_header(w["text"]):
+                    header_y = w["top"]
+                    break
 
-                # Assign deposit / withdrawal based on position
-                # ICICI column order: DEPOSITS  WITHDRAWALS  BALANCE
-                deposit    = ""
-                withdrawal = ""
-                if len(amounts) >= 3:
-                    deposit    = amounts[-3]
-                    withdrawal = amounts[-2]
-                elif len(amounts) == 2:
-                    # Only one non-balance amount — decide by Dr/Cr hint
-                    if _re.search(r"\bDR\b|/DR", line.upper()):
-                        withdrawal = amounts[0]
-                    else:
-                        deposit = amounts[0]
+            if header_y is not None:
+                # All words on the header line
+                header_words = sorted(
+                    [w for w in words if abs(w["top"] - header_y) < 6],
+                    key=lambda w: w["x0"]
+                )
+                col_x    = [w["x0"] for w in header_words] + [page.width]
+                col_names = [w["text"].strip() for w in header_words]
 
-                rows.append({
-                    "DATE":                date,
-                    "TRANSACTION DETAILS": narration,
-                    "DEPOSIT AMT":         deposit,
-                    "WITHDRAWAL AMT":      withdrawal,
-                    "BALANCE AMT":         balance,
-                })
+                # Body words below the header
+                body_words = [w for w in words if w["top"] > header_y + 4]
 
-    if not rows:
+                # Group body words into rows by y (±5px tolerance)
+                rows_by_y = {}
+                for w in body_words:
+                    y_key = round(w["top"] / 5) * 5
+                    rows_by_y.setdefault(y_key, []).append(w)
+
+                rows = []
+                for y_key in sorted(rows_by_y):
+                    row = [""] * len(col_names)
+                    for w in rows_by_y[y_key]:
+                        for ci in range(len(col_x) - 1):
+                            if col_x[ci] <= w["x0"] < col_x[ci + 1]:
+                                row[ci] = (row[ci] + " " + w["text"]).strip()
+                                break
+                    rows.append(row)
+
+                if rows:
+                    all_tables.append((page_num, col_names, rows))
+                    continue  # bbox worked — skip fallback
+
+            # ── Fallback: standard pdfplumber table extraction ────
+            for tbl in (page.extract_tables() or []):
+                if not tbl or len(tbl) < 2:
+                    continue
+                header_idx = 0
+                for i, row in enumerate(tbl[:10]):
+                    if any(_looks_like_date_header(str(c or "")) for c in row):
+                        header_idx = i
+                        break
+                col_names = [str(c or "").strip() for c in tbl[header_idx]]
+                rows = [[str(c or "").strip() for c in r]
+                        for r in tbl[header_idx + 1:]]
+                all_tables.append((page_num, col_names, rows))
+
+    if not all_tables:
         raise ValueError(
-            "No transactions found in this PDF. "
-            "Ensure it is a text-based bank statement (not a scanned image)."
+            "No tables found in PDF. Try uploading a CSV/Excel version instead."
         )
 
-    df = pd.DataFrame(rows)
+    # Pick table with most rows
+    _, best_headers, best_rows = max(all_tables, key=lambda x: len(x[2]))
 
-    for col in ["DEPOSIT AMT", "WITHDRAWAL AMT", "BALANCE AMT"]:
-        df[col] = pd.to_numeric(
-            df[col].astype(str).str.replace(",", "", regex=False),
-            errors="coerce"
-        ).fillna(0.0)
+    # Deduplicate/clean header names
+    seen, clean_headers = {}, []
+    for h in best_headers:
+        h = h.strip() or "COL"
+        if h in seen:
+            seen[h] += 1
+            h = f"{h}_{seen[h]}"
+        else:
+            seen[h] = 0
+        clean_headers.append(h)
 
-    df["DATE"] = pd.to_datetime(df["DATE"], format="%d-%m-%Y", errors="coerce")
-    df = df.dropna(subset=["DATE"])
-    df = df.sort_values("DATE").reset_index(drop=True)
+    df = pd.DataFrame(best_rows, columns=clean_headers)
+    df = df.dropna(how="all")
+    df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
+    df = df.reset_index(drop=True)
+
+    # Regex fallback: detect date column by value pattern
+    if not any(_looks_like_date_header(c) for c in df.columns):
+        for col in df.columns:
+            hits = df[col].dropna().astype(str).head(15).apply(
+                _looks_like_date_value
+            ).sum()
+            if hits >= 2:
+                df = df.rename(columns={col: "Date"})
+                break
+
     return df
 
 def process_file(uploaded, pdf_password=""):
