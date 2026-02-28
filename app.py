@@ -260,20 +260,28 @@ def _score_table(rows):
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Bbox-anchored PDF extraction — preserves empty cells so values
-    don't shift left into the wrong column (the root cause of
-    WITHDRAWAL AMT always showing 0).
+    Multi-page bbox-anchored PDF extraction.
+    1. Scans ALL pages to find the first header row → locks in column x-boundaries
+    2. Applies those SAME boundaries to every subsequent page
+    3. Concatenates all rows from all pages into one DataFrame
+    This prevents the column-shift bug (empty cells causing value drift)
+    and ensures all 40+ pages are captured, not just one.
     """
     import pdfplumber
 
     open_kwargs = {"password": password} if password else {}
-    all_tables  = []  # list of (page_num, col_names, rows)
+
+    col_x      = None   # column x-boundaries — set once, reused for all pages
+    col_names  = None   # column header names
+    all_rows   = []     # every data row from every page
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
         for page_num, page in enumerate(pdf.pages):
             words = page.extract_words()
+            if not words:
+                continue
 
-            # ── Try bbox-anchored extraction ──────────────────────
+            # ── Phase 1: find/confirm column boundaries ───────────
             header_y = None
             for w in words:
                 if _looks_like_date_header(w["text"]):
@@ -281,62 +289,50 @@ def extract_df_from_pdf(pdf_path, password=None):
                     break
 
             if header_y is not None:
-                # All words on the header line
-                header_words = sorted(
+                # Found a header row on this page — (re)lock boundaries
+                hw = sorted(
                     [w for w in words if abs(w["top"] - header_y) < 6],
                     key=lambda w: w["x0"]
                 )
-                col_x    = [w["x0"] for w in header_words] + [page.width]
-                col_names = [w["text"].strip() for w in header_words]
+                if len(hw) >= 3:   # sanity: at least 3 columns
+                    col_x     = [w["x0"] for w in hw] + [page.width]
+                    col_names = [w["text"].strip() for w in hw]
 
-                # Body words below the header
-                body_words = [w for w in words if w["top"] > header_y + 4]
+            # ── Phase 2: extract data rows using locked boundaries ─
+            if col_x is None:
+                continue   # haven't found the header yet — skip page
 
-                # Group body words into rows by y (±5px tolerance)
-                rows_by_y = {}
-                for w in body_words:
-                    y_key = round(w["top"] / 5) * 5
-                    rows_by_y.setdefault(y_key, []).append(w)
+            # Words below the header (or all words if no header on this page)
+            body_top  = (header_y + 6) if header_y is not None else 0
+            body_words = [w for w in words if w["top"] >= body_top]
 
-                rows = []
-                for y_key in sorted(rows_by_y):
-                    row = [""] * len(col_names)
-                    for w in rows_by_y[y_key]:
-                        for ci in range(len(col_x) - 1):
-                            if col_x[ci] <= w["x0"] < col_x[ci + 1]:
-                                row[ci] = (row[ci] + " " + w["text"]).strip()
-                                break
-                    rows.append(row)
+            # Group by y-coordinate (5px buckets)
+            rows_by_y = {}
+            for w in body_words:
+                y_key = round(w["top"] / 5) * 5
+                rows_by_y.setdefault(y_key, []).append(w)
 
-                if rows:
-                    all_tables.append((page_num, col_names, rows))
-                    continue  # bbox worked — skip fallback
+            for y_key in sorted(rows_by_y):
+                row = [""] * len(col_names)
+                for w in rows_by_y[y_key]:
+                    for ci in range(len(col_x) - 1):
+                        if col_x[ci] <= w["x0"] < col_x[ci + 1]:
+                            row[ci] = (row[ci] + " " + w["text"]).strip()
+                            break
+                # Skip rows that are entirely empty or just whitespace
+                if any(cell.strip() for cell in row):
+                    all_rows.append(row)
 
-            # ── Fallback: standard pdfplumber table extraction ────
-            for tbl in (page.extract_tables() or []):
-                if not tbl or len(tbl) < 2:
-                    continue
-                header_idx = 0
-                for i, row in enumerate(tbl[:10]):
-                    if any(_looks_like_date_header(str(c or "")) for c in row):
-                        header_idx = i
-                        break
-                col_names = [str(c or "").strip() for c in tbl[header_idx]]
-                rows = [[str(c or "").strip() for c in r]
-                        for r in tbl[header_idx + 1:]]
-                all_tables.append((page_num, col_names, rows))
-
-    if not all_tables:
+    if not all_rows or col_names is None:
         raise ValueError(
-            "No tables found in PDF. Try uploading a CSV/Excel version instead."
+            "No transaction table found in PDF. "
+            "Try uploading a CSV/Excel version instead."
         )
 
-    # Pick table with most rows
-    _, best_headers, best_rows = max(all_tables, key=lambda x: len(x[2]))
-
-    # Deduplicate/clean header names
+    # ── Build DataFrame ───────────────────────────────────────────
+    # Deduplicate header names
     seen, clean_headers = {}, []
-    for h in best_headers:
+    for h in col_names:
         h = h.strip() or "COL"
         if h in seen:
             seen[h] += 1
@@ -345,15 +341,22 @@ def extract_df_from_pdf(pdf_path, password=None):
             seen[h] = 0
         clean_headers.append(h)
 
-    df = pd.DataFrame(best_rows, columns=clean_headers)
+    df = pd.DataFrame(all_rows, columns=clean_headers)
+
+    # Drop rows that are pure duplicates of the header (repeated on each page)
+    header_set = set(h.lower() for h in clean_headers)
+    df = df[~df.apply(
+        lambda r: set(str(v).strip().lower() for v in r) == header_set, axis=1
+    )]
+
     df = df.dropna(how="all")
     df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
     df = df.reset_index(drop=True)
 
-    # Regex fallback: detect date column by value pattern
+    # Regex fallback: detect date column by value if header name didn't match
     if not any(_looks_like_date_header(c) for c in df.columns):
         for col in df.columns:
-            hits = df[col].dropna().astype(str).head(15).apply(
+            hits = df[col].dropna().astype(str).head(20).apply(
                 _looks_like_date_value
             ).sum()
             if hits >= 2:
