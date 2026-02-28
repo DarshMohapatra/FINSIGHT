@@ -1,4 +1,5 @@
 import streamlit as st
+import re
 import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
@@ -34,7 +35,7 @@ st.markdown("""
 .stApp{background:#020408!important;color:#e8eaf0!important;font-family:'Syne',sans-serif!important;}
 footer,#MainMenu,header{display:none!important;}
 .block-container{padding:0!important;max-width:100%!important;}
-.stButton>button{background:linear-gradient(135deg,#00f5a0,#00d4ff)!important;color:#000!important;font-weight:700!important;border:none!important;border-radius:10px!important;padding:14px 32px!important;font-size:15px!important;width:100%!important;} div[data-testid='stVerticalBlock'] > div:has(.stButton){height:0!important;overflow:hidden!important;}
+.stButton>button{background:linear-gradient(135deg,#00f5a0,#00d4ff)!important;color:#000!important;font-weight:700!important;border:none!important;border-radius:10px!important;padding:14px 32px!important;font-size:15px!important;width:100%!important;}
 .stButton>button:hover{transform:translateY(-2px)!important;box-shadow:0 8px 32px rgba(0,245,160,0.3)!important;}
 .stTabs [data-baseweb="tab-list"]{background:transparent!important;border-bottom:1px solid rgba(255,255,255,0.06)!important;padding:0 40px!important;}
 .stTabs [data-baseweb="tab"]{background:transparent!important;color:rgba(255,255,255,0.3)!important;font-family:'DM Mono',monospace!important;font-size:11px!important;letter-spacing:2px!important;text-transform:uppercase!important;padding:16px 24px!important;border:none!important;}
