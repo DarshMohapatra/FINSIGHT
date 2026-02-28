@@ -339,26 +339,9 @@ def extract_df_from_pdf(pdf_path, password=None):
 def process_file(uploaded, pdf_password=""):
     if uploaded.name.lower().endswith(".pdf"):
 
-        import pdfplumber as _plumber, io as _io
-        _raw = uploaded.read()
-        uploaded.seek(0)
-        _pw = {"password": pdf_password} if pdf_password else {}
-        with _plumber.open(_io.BytesIO(_raw), **_pw) as _pdf:
-            st.write("Total pages:", len(_pdf.pages))
-            for _pn, _pg in enumerate(_pdf.pages[:6]):
-                _tbls = _pg.extract_tables()
-                st.write("PAGE", _pn + 1, "— tables:", len(_tbls))
-                for _ti, _tbl in enumerate(_tbls):
-                    _nc = len(_tbl[0]) if _tbl else 0
-                    st.write("  table", _ti, "rows:", len(_tbl), "cols:", _nc)
-                    for _ri in range(min(4, len(_tbl))):
-                        _cells = [str(_tbl[_ri][_ci] or "").strip()[:25] for _ci in range(_nc)]
-                        st.write("   ", _ri, _cells)
-        st.stop()
 
         df = extract_df_from_pdf(uploaded, pdf_password)
-        try: df = normalize_columns(df)
-        except: pass
+        df = normalize_columns(df)
     elif uploaded.name.lower().endswith(".csv"):
         df = pd.read_csv(uploaded)
         df = normalize_columns(df)
