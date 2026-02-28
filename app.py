@@ -258,22 +258,43 @@ def _score_table(rows):
 
 
 
+def _is_real_table_header(words_on_line):
+    """
+    Return True only if a line of words looks like a real bank statement
+    table header — must contain 2+ distinct financial keyword categories.
+    This prevents matching "DATE" inside disclaimer/footer paragraphs.
+    """
+    text = " ".join(w["text"].upper().strip() for w in words_on_line)
+    score = 0
+    if any(k in text for k in ["DATE", "DT", "VALUE DATE", "TXN DATE"]):
+        score += 1
+    if any(k in text for k in ["PARTICULARS", "NARRATION", "DESCRIPTION",
+                                "TRANSACTION", "DETAILS", "REMARKS", "MODE"]):
+        score += 1
+    if any(k in text for k in ["DEBIT", "WITHDRAWAL", "DR", "WD"]):
+        score += 1
+    if any(k in text for k in ["CREDIT", "DEPOSIT", "CR"]):
+        score += 1
+    if any(k in text for k in ["BALANCE", "BAL"]):
+        score += 1
+    return score >= 3   # need at least 3 keyword categories
+
+
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Multi-page bbox-anchored PDF extraction.
-    1. Scans ALL pages to find the first header row → locks in column x-boundaries
-    2. Applies those SAME boundaries to every subsequent page
-    3. Concatenates all rows from all pages into one DataFrame
-    This prevents the column-shift bug (empty cells causing value drift)
-    and ensures all 40+ pages are captured, not just one.
+    Multi-page bbox-anchored PDF extraction with robust header detection.
+    - Requires 3+ financial keyword categories on a line to call it a header
+      (prevents locking onto "DATE" inside disclaimer paragraphs)
+    - Locks column boundaries from the first real header found
+    - Concatenates rows from ALL pages
     """
     import pdfplumber
 
     open_kwargs = {"password": password} if password else {}
 
-    col_x      = None   # column x-boundaries — set once, reused for all pages
-    col_names  = None   # column header names
-    all_rows   = []     # every data row from every page
+    col_x      = None   # locked once from first real header
+    col_names  = None
+    all_rows   = []
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
         for page_num, page in enumerate(pdf.pages):
@@ -281,32 +302,34 @@ def extract_df_from_pdf(pdf_path, password=None):
             if not words:
                 continue
 
-            # ── Phase 1: find/confirm column boundaries ───────────
+            # ── Scan every unique y-level for a real header line ──
+            ys = sorted(set(round(w["top"] / 5) * 5 for w in words))
             header_y = None
-            for w in words:
-                if _looks_like_date_header(w["text"]):
-                    header_y = w["top"]
-                    break
+
+            for y_bucket in ys:
+                line_words = [w for w in words if abs(w["top"] - y_bucket) < 6]
+                if _is_real_table_header(line_words):
+                    header_y = y_bucket
+                    break   # first real header wins
 
             if header_y is not None:
-                # Found a header row on this page — (re)lock boundaries
+                # Lock column boundaries from this header row
                 hw = sorted(
                     [w for w in words if abs(w["top"] - header_y) < 6],
                     key=lambda w: w["x0"]
                 )
-                if len(hw) >= 3:   # sanity: at least 3 columns
+                if len(hw) >= 3:
                     col_x     = [w["x0"] for w in hw] + [page.width]
                     col_names = [w["text"].strip() for w in hw]
 
-            # ── Phase 2: extract data rows using locked boundaries ─
+            # ── Extract data rows using locked boundaries ──────────
             if col_x is None:
-                continue   # haven't found the header yet — skip page
+                continue
 
-            # Words below the header (or all words if no header on this page)
-            body_top  = (header_y + 6) if header_y is not None else 0
+            body_top   = (header_y + 6) if header_y is not None else 0
             body_words = [w for w in words if w["top"] >= body_top]
 
-            # Group by y-coordinate (5px buckets)
+            # Group into rows by y (5px buckets)
             rows_by_y = {}
             for w in body_words:
                 y_key = round(w["top"] / 5) * 5
@@ -319,18 +342,26 @@ def extract_df_from_pdf(pdf_path, password=None):
                         if col_x[ci] <= w["x0"] < col_x[ci + 1]:
                             row[ci] = (row[ci] + " " + w["text"]).strip()
                             break
-                # Skip rows that are entirely empty or just whitespace
-                if any(cell.strip() for cell in row):
-                    all_rows.append(row)
+
+                # Skip empty rows and repeated header rows
+                row_text = " ".join(row).strip()
+                if not row_text:
+                    continue
+                row_words_obj = [{"text": c, "top": 0, "x0": 0} for c in row if c]
+                if _is_real_table_header(
+                    [{"text": c} for c in row if c.strip()]
+                ):
+                    continue   # skip repeated header printed on each page
+
+                all_rows.append(row)
 
     if not all_rows or col_names is None:
         raise ValueError(
-            "No transaction table found in PDF. "
-            "Try uploading a CSV/Excel version instead."
+            "No transaction table found in this PDF. "
+            "Please try uploading a CSV or Excel version instead."
         )
 
     # ── Build DataFrame ───────────────────────────────────────────
-    # Deduplicate header names
     seen, clean_headers = {}, []
     for h in col_names:
         h = h.strip() or "COL"
@@ -342,18 +373,11 @@ def extract_df_from_pdf(pdf_path, password=None):
         clean_headers.append(h)
 
     df = pd.DataFrame(all_rows, columns=clean_headers)
-
-    # Drop rows that are pure duplicates of the header (repeated on each page)
-    header_set = set(h.lower() for h in clean_headers)
-    df = df[~df.apply(
-        lambda r: set(str(v).strip().lower() for v in r) == header_set, axis=1
-    )]
-
     df = df.dropna(how="all")
     df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
     df = df.reset_index(drop=True)
 
-    # Regex fallback: detect date column by value if header name didn't match
+    # Regex fallback: detect date column by value if name didn't match
     if not any(_looks_like_date_header(c) for c in df.columns):
         for col in df.columns:
             hits = df[col].dropna().astype(str).head(20).apply(
