@@ -16,6 +16,17 @@ except ImportError:
 
 st.set_page_config(page_title="FinSight", page_icon="⚡", layout="wide", initial_sidebar_state="collapsed")
 
+# ── SESSION STATE GUARD (Fix 3: prevents blank page on rerun) ──
+if "show_app" not in st.session_state:
+    st.session_state.show_app = False
+if "uploaded_file_data" not in st.session_state:
+    st.session_state.uploaded_file_data = None
+if "uploaded_file_name" not in st.session_state:
+    st.session_state.uploaded_file_name = None
+if "df_processed" not in st.session_state:
+    st.session_state.df_processed = None
+
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
@@ -116,94 +127,126 @@ def normalize_columns(df):
 
 
 
-def parse_pdf(f, pwd=""):
-    import io
-    if not PDF_OK:
-        raise ValueError("pdfplumber not installed.")
-    raw = f.read(); f.seek(0)
-    kw = {"password": pwd} if pwd.strip() else {}
-    try:
-        pdf = pdfplumber.open(io.BytesIO(raw), **kw)
-    except Exception as e:
-        if any(w in str(e).lower() for w in ["password","encrypt","incorrect"]):
-            raise ValueError("Wrong password. Try PAN number, DOB (DDMMYYYY), or account number.")
-        raise ValueError(f"Cannot open PDF: {e}")
-    tables = []
-    with pdf:
-        for pg in pdf.pages:
-            for t in (pg.extract_tables() or []):
-                if t and len(t) > 2:
-                    tables.append(t)
-    if not tables:
-        raise ValueError("No tables found. Download the digital (non-scanned) statement from NetBanking, or use CSV/Excel.")
-    FIN_KW = ["date","debit","credit","balance","withdrawal","deposit","narration","particulars","description","amount","dr","cr"]
-    best, best_score = None, 0
-    for tbl in tables:
-        hi = next((i for i,r in enumerate(tbl) if r and any(c and str(c).strip() for c in r)), 0)
-        hdrs = [str(c).strip() if c else f"c{j}" for j,c in enumerate(tbl[hi])]
-        rows = tbl[hi+1:]
-        if len(rows) < 2: continue
-        score = sum(1 for h in hdrs if any(k in h.lower() for k in FIN_KW)) + len(rows)*0.05
-        if score > best_score:
-            best_score = score
-            try: best = (hdrs, rows)
-            except: pass
-    if not best:
-        raise ValueError("Could not find transaction table in PDF. Try CSV/Excel.")
-    hdrs, rows = best
-    def clean(v):
-        if v is None or str(v).strip() in ["","-","None"]: return 0.0
-        s = str(v).replace(",","").replace(" ","").strip()
-        neg = s.startswith("(") and s.endswith(")")
-        s = s.strip("()").replace("Dr","").replace("Cr","")
-        try: return (-1 if neg else 1)*float(s)
-        except: return 0.0
-    def fcol(df, cands):
-        up = {c.upper().strip():c for c in df.columns}
-        for ca in cands:
-            k = ca.upper().strip()
-            if k in up: return up[k]
-            for u,c in up.items():
-                if k in u or u in k: return c
-        return None
-    try:
-        df = pd.DataFrame(rows, columns=hdrs).dropna(how="all")
-    except Exception as e:
-        raise ValueError(f"Could not parse PDF table: {e}")
-    date_c = fcol(df, ["Date","Txn Date","Transaction Date","Tran Date","Value Date","Trans Date"])
-    det_c  = fcol(df, ["Narration","Description","Particulars","Transaction Remarks","Details","Transaction Details","Remarks"])
-    dr_c   = fcol(df, ["Withdrawal Amt (Dr)","Withdrawal Amt","Withdrawal","Debit","Dr","Dr Amount","Debit Amount"])
-    cr_c   = fcol(df, ["Deposit Amt (Cr)","Deposit Amt","Deposit","Credit","Cr","Cr Amount","Credit Amount"])
-    bal_c  = fcol(df, ["Balance","Closing Balance","Balance Amt","Running Balance"])
-    amt_c  = fcol(df, ["Amount","Transaction Amount"])
-    typ_c  = fcol(df, ["Type","Cr/Dr","Dr/Cr","Txn Type","Trans Type"])
-    if not date_c:
-        raise ValueError(f"Could not find Date column. Found: {list(df.columns)}. Try CSV/Excel.")
-    out = pd.DataFrame()
-    out["DATE"] = df[date_c]
-    out["TRANSACTION DETAILS"] = df[det_c].fillna("").astype(str) if det_c else "TRANSACTION"
-    if dr_c and cr_c:
-        out["WITHDRAWAL AMT"] = df[dr_c].apply(clean)
-        out["DEPOSIT AMT"]    = df[cr_c].apply(clean)
-    elif amt_c and typ_c:
-        amts = df[amt_c].apply(clean)
-        typs = df[typ_c].astype(str).str.upper()
-        out["WITHDRAWAL AMT"] = amts.where(typs.str.contains("DR|DEBIT"), 0)
-        out["DEPOSIT AMT"]    = amts.where(typs.str.contains("CR|CREDIT"), 0)
-    elif amt_c:
-        amts = df[amt_c].apply(clean)
-        out["WITHDRAWAL AMT"] = amts.apply(lambda x: abs(x) if x<0 else 0)
-        out["DEPOSIT AMT"]    = amts.apply(lambda x: x if x>0 else 0)
-    else:
-        out["WITHDRAWAL AMT"] = 0
-        out["DEPOSIT AMT"]    = 0
-    out["BALANCE AMT"] = df[bal_c].apply(clean) if bal_c else 0
-    bad = ["date","txn date","transaction date","tran date","value date",""]
-    out = out[~out["DATE"].astype(str).str.strip().str.lower().isin(bad)]
-    if out.empty:
-        raise ValueError("PDF parsed but no valid rows found. Try CSV/Excel.")
-    return out
 
+# ══════════════════════════════════════════════════════════════════
+# ROBUST PDF PARSER (Fix 2: handles all real-world bank statement PDFs)
+# ══════════════════════════════════════════════════════════════════
+def _looks_like_date_header(val):
+    """Return True if a string looks like a date column header."""
+    if not isinstance(val, str):
+        return False
+    val_clean = val.strip().lower()
+    date_keywords = [
+        "date", "txn date", "transaction date", "value date",
+        "posting date", "entry date", "timestamp", "dt"
+    ]
+    return any(kw in val_clean for kw in date_keywords)
+
+def _looks_like_date_value(val):
+    """Return True if a string looks like an actual date value."""
+    if not isinstance(val, str):
+        return False
+    # Matches: 01/02/2023, 01-Feb-2023, 2023-01-02, 01 Feb 2023 etc.
+    patterns = [
+        r"\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4}",
+        r"\d{1,2}[\-/ ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\-/ ]\d{2,4}",
+        r"\d{4}[\-/]\d{1,2}[\-/]\d{1,2}",
+    ]
+    return any(re.search(p, val.strip(), re.IGNORECASE) for p in patterns)
+
+def _score_table(rows):
+    """Score a table's likelihood of being the transactions table (higher = better)."""
+    if not rows or len(rows) < 3:
+        return 0
+    score = 0
+    # More rows = better
+    score += min(len(rows), 50) * 2
+    # Check first few rows for date-like values
+    for row in rows[:5]:
+        for cell in row:
+            if _looks_like_date_value(str(cell or "")):
+                score += 10
+                break
+    # Penalise if very few columns (likely a summary box)
+    num_cols = max(len(r) for r in rows)
+    if num_cols < 3:
+        score -= 20
+    return score
+
+def extract_df_from_pdf(pdf_path, password=None):
+    """
+    Robustly extract a transaction DataFrame from a bank statement PDF.
+    Strategy:
+      1. Extract ALL tables across ALL pages
+      2. Score each table and pick the best candidate
+      3. Scan the first 10 rows to find the real header row
+      4. If no header found via keywords, use regex on values to detect date column
+    """
+    import pdfplumber
+
+    all_tables = []
+
+    open_kwargs = {"password": password} if password else {}
+    with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
+        for page_num, page in enumerate(pdf.pages):
+            tables = page.extract_tables()
+            for tbl in tables:
+                if tbl and len(tbl) > 1:
+                    all_tables.append((page_num, tbl))
+
+    if not all_tables:
+        raise ValueError("No tables found in PDF. Try uploading a CSV/Excel version.")
+
+    # Pick the best table by score
+    best_page, best_table = max(all_tables, key=lambda x: _score_table(x[1]))
+
+    # ── Find the real header row ──────────────────────────────────
+    header_idx = None
+    for i, row in enumerate(best_table[:10]):
+        row_str = [str(c or "").strip() for c in row]
+        if any(_looks_like_date_header(c) for c in row_str):
+            header_idx = i
+            break
+
+    if header_idx is not None:
+        headers = [str(c or "").strip() for c in best_table[header_idx]]
+        data_rows = best_table[header_idx + 1:]
+    else:
+        # Fallback: use row 0 as header and try to fix column names later
+        headers = [str(c or "").strip() for c in best_table[0]]
+        data_rows = best_table[1:]
+
+    # Clean empty headers
+    seen = {}
+    clean_headers = []
+    for h in headers:
+        if not h:
+            h = "COL"
+        if h in seen:
+            seen[h] += 1
+            h = f"{h}_{seen[h]}"
+        else:
+            seen[h] = 0
+        clean_headers.append(h)
+
+    df = pd.DataFrame(data_rows, columns=clean_headers)
+    # Drop fully-empty rows
+    df = df.dropna(how="all")
+    df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
+    df = df.reset_index(drop=True)
+
+    # ── Regex fallback: if no DATE column detected yet, scan values ──
+    date_col_found = any(_looks_like_date_header(c) for c in df.columns)
+    if not date_col_found:
+        for col in df.columns:
+            sample = df[col].dropna().astype(str).head(10)
+            date_matches = sample.apply(_looks_like_date_value).sum()
+            if date_matches >= 2:
+                df = df.rename(columns={col: "Date"})
+                break
+
+    return df
+# ══════════════════════════════════════════════════════════════════
 
 def process_file(uploaded, pdf_password=""):
     if uploaded.name.lower().endswith(".pdf"):
