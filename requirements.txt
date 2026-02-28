@@ -1,10 +1,10 @@
 streamlit
 pandas
 numpy
+matplotlib
 scikit-learn
-joblib
 groq
 prophet
+pdfplumber
+pymupdf
 openpyxl
-matplotlib
-plotly
