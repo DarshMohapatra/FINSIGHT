@@ -207,23 +207,56 @@ def _looks_like_date_value(val):
 
 
 def _score_table(rows):
-    """Score a table's likelihood of being the transactions table (higher = better)."""
+    """Score a table — higher = more likely to be the transactions table."""
     if not rows or len(rows) < 3:
-        return 0
+        return -1
     score = 0
-    # More rows = better
-    score += min(len(rows), 50) * 2
-    # Check first few rows for date-like values
-    for row in rows[:5]:
-        for cell in row:
-            if _looks_like_date_value(str(cell or "")):
-                score += 10
-                break
-    # Penalise if very few columns (likely a summary box)
-    num_cols = max(len(r) for r in rows)
-    if num_cols < 3:
-        score -= 20
+
+    # Reward: many rows (transaction tables are long)
+    score += min(len(rows), 100)  # cap at 100 to avoid dominating
+
+    # Reward: many columns (transaction tables have 4-6 columns)
+    avg_cols = sum(len(r) for r in rows) / len(rows)
+    if 3 <= avg_cols <= 7:
+        score += 30
+
+    # Big reward: header row contains date-like keywords
+    header = [str(c or '').strip().lower() for c in rows[0]]
+    date_kws   = ['date', 'dt', 'txn', 'trans', 'value date', 'posting']
+    detail_kws = ['narration', 'particular', 'description', 'details', 'remarks']
+    amount_kws = ['debit', 'credit', 'withdrawal', 'deposit', 'amount', 'dr', 'cr']
+
+    has_date   = any(any(kw in h for kw in date_kws)   for h in header)
+    has_detail = any(any(kw in h for kw in detail_kws) for h in header)
+    has_amount = any(any(kw in h for kw in amount_kws) for h in header)
+
+    if has_date:   score += 200  # date header is the strongest signal
+    if has_detail: score += 100
+    if has_amount: score += 100
+
+    # Big penalty: first cell looks like a cover-page / summary label
+    first_cell = str(rows[0][0] or '').strip().lower()
+    cover_page_signals = [
+        'relationship manager', 'customer', 'account holder',
+        'statement summary', 'branch', 'address', 'ifsc',
+        'dear', 'your', 'balance summary', 'account no',
+    ]
+    if any(sig in first_cell for sig in cover_page_signals):
+        score -= 500  # this is definitely not the transactions table
+
+    # Reward: second row looks like it has date values
+    if len(rows) > 1:
+        import re as _re
+        date_pat = _re.compile(
+            r'(\d{2}-\d{2}-\d{4}|\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})'
+        )
+        first_data_row = [str(c or '') for c in rows[1]]
+        if any(date_pat.search(cell) for cell in first_data_row):
+            score += 300  # data rows with dates = almost certainly right table
+
     return score
+
+
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
@@ -308,7 +341,7 @@ def extract_df_from_pdf(pdf_path, password=None):
 def process_file(uploaded, pdf_password=""):
     if uploaded.name.lower().endswith(".pdf"):
         df = extract_df_from_pdf(uploaded, pdf_password)
-        st.info("DEBUG raw PDF cols: " + str(list(df.columns)))  # TEMP DEBUG
+        st.info("DEBUG raw PDF cols: " + str(list(df.columns)) + " | rows: " + str(len(df)))  # TEMP DEBUG
         try: df = normalize_columns(df)
         except: pass
     elif uploaded.name.lower().endswith(".csv"):
