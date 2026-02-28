@@ -80,91 +80,94 @@ def categorize(desc):
 
 
 def normalize_columns(df):
-    # Stage 0: strip whitespace from all column names
-    df.columns = [str(c).strip() for c in df.columns]
+    df.columns = df.columns.str.strip()
 
-    # Stage 1: exhaustive exact-name rename map
-    direct = {
-        "Date": "DATE", "date": "DATE", "DATE": "DATE",
-        "Dt": "DATE", "DT": "DATE",
-        "Trans Date": "DATE", "Trans. Date": "DATE",
-        "Transaction Date": "DATE", "Txn Date": "DATE", "TXN DATE": "DATE",
-        "Value Date": "DATE", "VALUE DATE": "DATE",
-        "Posting Date": "DATE", "Post Date": "DATE", "Timestamp": "DATE",
-        "Narration": "TRANSACTION DETAILS", "NARRATION": "TRANSACTION DETAILS",
-        "Particulars": "TRANSACTION DETAILS", "PARTICULARS": "TRANSACTION DETAILS",
-        "Description": "TRANSACTION DETAILS", "DESCRIPTION": "TRANSACTION DETAILS",
-        "Remarks": "TRANSACTION DETAILS", "Details": "TRANSACTION DETAILS",
-        "Type": "TRANSACTION DETAILS", "Category": "TRANSACTION DETAILS",
-        "Debit": "WITHDRAWAL AMT", "DEBIT": "WITHDRAWAL AMT",
-        "Debit Amt": "WITHDRAWAL AMT", "Debit Amount": "WITHDRAWAL AMT",
-        "DR": "WITHDRAWAL AMT", "Dr": "WITHDRAWAL AMT",
-        "Withdrawals": "WITHDRAWAL AMT", "WITHDRAWALS": "WITHDRAWAL AMT",
-        "Withdrawal": "WITHDRAWAL AMT", "Amount Debited": "WITHDRAWAL AMT",
-        "Credit": "DEPOSIT AMT", "CREDIT": "DEPOSIT AMT",
-        "Credit Amt": "DEPOSIT AMT", "Credit Amount": "DEPOSIT AMT",
-        "CR": "DEPOSIT AMT", "Cr": "DEPOSIT AMT",
-        "Deposits": "DEPOSIT AMT", "DEPOSITS": "DEPOSIT AMT",
-        "Deposit": "DEPOSIT AMT", "Amount Credited": "DEPOSIT AMT",
-        "Balance": "BALANCE AMT", "BALANCE": "BALANCE AMT",
-        "Closing Balance": "BALANCE AMT", "CLOSING BALANCE": "BALANCE AMT",
-        "Running Balance": "BALANCE AMT", "Bal": "BALANCE AMT", "BAL": "BALANCE AMT",
+    # ── Step 1: case-insensitive direct rename map ─────────────────
+    direct_map = {
+        # TRANSACTION DETAILS aliases
+        "CATEGORY": "TRANSACTION DETAILS", "TYPE": "TRANSACTION DETAILS",
+        "NARRATION": "TRANSACTION DETAILS", "DESCRIPTION": "TRANSACTION DETAILS",
+        "PARTICULARS": "TRANSACTION DETAILS", "DETAILS": "TRANSACTION DETAILS",
+        "REMARKS": "TRANSACTION DETAILS", "CHEQUENO": "TRANSACTION DETAILS",
+        "CHEQUE NO": "TRANSACTION DETAILS", "MODE": "TRANSACTION DETAILS",
+        # DATE aliases
+        "TIMESTAMP": "DATE", "TRANSACTION DATE": "DATE", "TXN DATE": "DATE",
+        "TRANS DATE": "DATE", "VALUE DATE": "DATE", "POSTING DATE": "DATE",
+        "ENTRY DATE": "DATE",
+        # WITHDRAWAL aliases
+        "DEBIT": "WITHDRAWAL AMT", "DEBIT AMT": "WITHDRAWAL AMT",
+        "DR": "WITHDRAWAL AMT", "WITHDRAWALS": "WITHDRAWAL AMT",
+        "AMOUNT DEBITED": "WITHDRAWAL AMT", "WD": "WITHDRAWAL AMT",
+        # DEPOSIT aliases
+        "CREDIT": "DEPOSIT AMT", "CREDIT AMT": "DEPOSIT AMT",
+        "CR": "DEPOSIT AMT", "DEPOSITS": "DEPOSIT AMT",
+        "AMOUNT CREDITED": "DEPOSIT AMT",
+        # BALANCE aliases
+        "BALANCE": "BALANCE AMT", "CLOSING BALANCE": "BALANCE AMT",
+        "RUNNING BALANCE": "BALANCE AMT", "BAL": "BALANCE AMT",
     }
-    for src, tgt in direct.items():
-        if src in df.columns and tgt not in df.columns:
-            df = df.rename(columns={src: tgt})
 
-    # Stage 2: fully lowercase fuzzy match
-    date_c   = ['date', 'transaction date', 'txn date', 'value date',
-                'timestamp', 'posting date', 'trans date', 'dt',
-                'trans. date', 'post date']
-    detail_c = ['transaction details', 'narration', 'description',
-                'particulars', 'type', 'category', 'remarks', 'details']
-    wd_c     = ['withdrawal amt', 'debit', 'debit amt', 'dr', 'withdrawals',
-                'amount debited', 'withdrawal', 'debit amount']
-    dep_c    = ['deposit amt', 'credit', 'credit amt', 'cr', 'deposits',
-                'amount credited', 'deposit', 'credit amount']
-    bal_c    = ['balance amt', 'balance', 'closing balance',
-                'running balance', 'bal', 'closing bal']
+    # Apply case-insensitive: compare upper-stripped column names
+    new_cols = {}
+    already_mapped = set()
+    for col in df.columns:
+        key = col.upper().strip()
+        # Only map if target not already present in df and not already claimed
+        if key in direct_map:
+            tgt = direct_map[key]
+            if tgt not in df.columns and tgt not in already_mapped:
+                new_cols[col] = tgt
+                already_mapped.add(tgt)
+    df = df.rename(columns=new_cols)
 
-    cols_lower = {c.lower().strip(): c for c in df.columns}
+    # ── Step 2: fuzzy substring match for remaining columns ─────────
+    cols_upper = {c.upper().strip(): c for c in df.columns}
+    date_c   = ["DATE", "TRANSACTION DATE", "TXN DATE", "VALUE DATE", "TIMESTAMP", "POSTING DATE"]
+    detail_c = ["TRANSACTION DETAILS", "NARRATION", "DESCRIPTION", "PARTICULARS",
+                "REMARKS", "DETAILS", "TYPE", "CATEGORY", "MODE", "CHEQUE"]
+    wd_c     = ["WITHDRAWAL AMT", "DEBIT", "DEBIT AMT", "DR", "WITHDRAWALS", "AMOUNT DEBITED"]
+    dep_c    = ["DEPOSIT AMT", "CREDIT", "CREDIT AMT", "CR", "DEPOSITS", "AMOUNT CREDITED"]
+    bal_c    = ["BALANCE AMT", "BALANCE", "CLOSING BALANCE", "RUNNING BALANCE", "BAL"]
 
     def find(cands):
         for c in cands:
-            if c in cols_lower:
-                return cols_lower[c]
+            if c in cols_upper: return cols_upper[c]
         for c in cands:
-            for cl, co in cols_lower.items():
-                if c in cl or cl in c:
-                    return co
+            for cu, co in cols_upper.items():
+                if c in cu or cu in c: return co
         return None
 
     col_map = {}
-    for tgt, cands in [
-        ("DATE",                date_c),
-        ("TRANSACTION DETAILS", detail_c),
-        ("WITHDRAWAL AMT",      wd_c),
-        ("DEPOSIT AMT",         dep_c),
-        ("BALANCE AMT",         bal_c),
-    ]:
-        if tgt not in df.columns:
-            f = find(cands)
-            if f:
-                col_map[f] = tgt
+    for tgt, cands in [("DATE", date_c), ("TRANSACTION DETAILS", detail_c),
+                       ("WITHDRAWAL AMT", wd_c), ("DEPOSIT AMT", dep_c), ("BALANCE AMT", bal_c)]:
+        f = find(cands)
+        if f and tgt not in df.columns:
+            col_map[f] = tgt
     df = df.rename(columns=col_map)
 
-    # Stage 3: value-scan fallback — if DATE still missing, find it by cell content
-    if 'DATE' not in df.columns:
-        for col in df.columns:
-            sample = df[col].dropna().astype(str).head(20)
-            hits   = sample.apply(_looks_like_date_value).sum()
-            if hits >= 3:
-                df = df.rename(columns={col: 'DATE'})
-                break
+    # ── Step 3: last-resort fallback for TRANSACTION DETAILS ────────
+    # If still missing, use whichever unmapped string column has
+    # the most unique non-numeric values — almost certainly the narration col
+    if "TRANSACTION DETAILS" not in df.columns:
+        already_used = {"DATE", "WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"}
+        candidate_cols = [c for c in df.columns if c not in already_used]
+        best_col, best_score = None, 0
+        for col in candidate_cols:
+            try:
+                # Score = number of unique non-numeric values (narrations are unique text)
+                vals = df[col].dropna().astype(str)
+                non_numeric = vals[~vals.str.match(r"^[\d\.,\s\-]+$")]
+                score = non_numeric.nunique()
+                if score > best_score:
+                    best_score = score
+                    best_col = col
+            except Exception:
+                pass
+        if best_col:
+            df = df.rename(columns={best_col: "TRANSACTION DETAILS"})
 
-    # Validate
-    missing = [r for r in ["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT"]
-               if r not in df.columns]
+    # ── Final check ──────────────────────────────────────────────────
+    missing = [c for c in ["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT"] if c not in df.columns]
     if missing:
         raise ValueError(
             "Cannot find required columns: " + str(missing) +
@@ -175,8 +178,6 @@ def normalize_columns(df):
         if col not in df.columns:
             df[col] = 0
     return df
-
-
 
 def _looks_like_date_header(val):
     """True if a string looks like a date column header."""
