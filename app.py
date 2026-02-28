@@ -199,7 +199,7 @@ def build_context(df):
 LANDING_HTML = open('/mount/src/finsight/landing.html').read() if os.path.exists('/mount/src/finsight/landing.html') else ""
 
 if st.session_state.page == "landing":
-    components.html(LANDING_HTML, height=3000, scrolling=True)
+    components.html(LANDING_HTML, height=2400, scrolling=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("⚡ Launch App — Analyze My Finances", use_container_width=True):
