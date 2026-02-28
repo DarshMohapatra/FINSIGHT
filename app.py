@@ -144,16 +144,21 @@ def _looks_like_date_header(val):
     return any(kw in val_clean for kw in date_keywords)
 
 def _looks_like_date_value(val):
-    """Return True if a string looks like an actual date value."""
-    if not isinstance(val, str):
+    """Return True if val looks like a date. Covers all major Indian bank formats."""
+    if val is None:
         return False
-    # Matches: 01/02/2023, 01-Feb-2023, 2023-01-02, 01 Feb 2023 etc.
+    s = str(val).strip()
+    # Covers ISO, ICICI (DD-MM-YYYY), slash variants, and month-name formats
     patterns = [
-        r"\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4}",
-        r"\d{1,2}[\-/ ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\-/ ]\d{2,4}",
-        r"\d{4}[\-/]\d{1,2}[\-/]\d{1,2}",
+        r'\d{4}-\d{2}-\d{2}',
+        r'\d{2}-\d{2}-\d{4}',
+        r'\d{2}/\d{2}/\d{4}',
+        r'\d{2}/\d{2}/\d{2}',
+        r'\d{2}-[A-Za-z]{3}-\d{4}',
+        r'\d{1,2}\s+[A-Za-z]{3}\s+\d{4}',
     ]
-    return any(re.search(p, val.strip(), re.IGNORECASE) for p in patterns)
+    return any(re.search(p, s) for p in patterns)
+
 
 def _score_table(rows):
     """Score a table's likelihood of being the transactions table (higher = better)."""
@@ -232,7 +237,12 @@ def extract_df_from_pdf(pdf_path, password=None):
 
     df = pd.DataFrame(data_rows, columns=clean_headers)
     # Drop fully-empty rows
+    df.columns = [str(c).strip().upper().replace("\n", " ").replace("\r", "").strip() for c in df.columns]  # normalize PDF headers
     df = df.dropna(how="all")
+    # Strip repeated PDF header rows (ICICI prints header on every page)
+    if "DATE" in df.columns:
+        df = df[df["DATE"].astype(str).str.strip().str.upper() != "DATE"]
+    df = df.reset_index(drop=True)
     df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
     df = df.reset_index(drop=True)
 
