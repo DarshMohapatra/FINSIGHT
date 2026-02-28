@@ -17,7 +17,7 @@ st.markdown("""
 *{box-sizing:border-box;}
 .stApp{background:#020408!important;color:#e8eaf0!important;font-family:'Syne',sans-serif!important;}
 footer,#MainMenu,header{display:none!important;}
-.block-container{padding:0!important;max-width:100%!important;}
+.block-container{padding:0!important;max-width:100%!important;} iframe{width:100%!important;min-width:100%!important;border:none!important;}
 .stButton>button{background:linear-gradient(135deg,#00f5a0,#00d4ff)!important;color:#000!important;font-weight:700!important;border:none!important;border-radius:10px!important;padding:14px 32px!important;font-size:15px!important;width:100%!important;}
 .stButton>button:hover{transform:translateY(-2px)!important;box-shadow:0 8px 32px rgba(0,245,160,0.3)!important;}
 .stTabs [data-baseweb="tab-list"]{background:transparent!important;border-bottom:1px solid rgba(255,255,255,0.06)!important;padding:0 40px!important;}
@@ -199,7 +199,7 @@ def build_context(df):
 LANDING_HTML = open('/mount/src/finsight/landing.html').read() if os.path.exists('/mount/src/finsight/landing.html') else ""
 
 if st.session_state.page == "landing":
-    components.html(LANDING_HTML, height=6200, scrolling=True)
+    components.html(LANDING_HTML, height=5800, scrolling=True)
     st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
