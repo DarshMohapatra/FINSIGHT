@@ -6,5 +6,4 @@ scikit-learn
 groq
 prophet
 pdfplumber
-pymupdf
 openpyxl
