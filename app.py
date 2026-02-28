@@ -167,7 +167,29 @@ def normalize_columns(df):
             df = df.rename(columns={best_col: "TRANSACTION DETAILS"})
 
     # ── Final check ──────────────────────────────────────────────────
-    missing = [c for c in ["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT"] if c not in df.columns]
+    # TRANSACTION DETAILS is optional — create empty if missing
+    # (pdfplumber sometimes can't extract narration column from PDFs)
+    if "TRANSACTION DETAILS" not in df.columns:
+        # Last resort: use any remaining unmapped string column
+        already_used = {"DATE", "WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"}
+        candidates = [c for c in df.columns if c not in already_used]
+        best_col, best_score = None, 0
+        for col in candidates:
+            try:
+                vals = df[col].dropna().astype(str)
+                score = vals[~vals.str.match(r"^[\d.,\s\-]+$")].nunique()
+                if score > best_score:
+                    best_score, best_col = score, col
+            except Exception:
+                pass
+        if best_col and best_score > 0:
+            df = df.rename(columns={best_col: "TRANSACTION DETAILS"})
+        else:
+            # Create empty column — categorize() handles "" → "Other"
+            df["TRANSACTION DETAILS"] = ""
+
+    # Only DATE and WITHDRAWAL AMT are truly required
+    missing = [c for c in ["DATE", "WITHDRAWAL AMT"] if c not in df.columns]
     if missing:
         raise ValueError(
             "Cannot find required columns: " + str(missing) +
