@@ -352,6 +352,18 @@ def process_file(uploaded, pdf_password=""):
     df["WITHDRAWAL AMT"] = pd.to_numeric(df["WITHDRAWAL AMT"], errors="coerce").fillna(0)
     df["DEPOSIT AMT"]    = pd.to_numeric(df["DEPOSIT AMT"],    errors="coerce").fillna(0)
     df["BALANCE AMT"]    = pd.to_numeric(df["BALANCE AMT"],    errors="coerce").fillna(0)
+
+    # ── Swap sanity check ──────────────────────────────────────────
+    # pdfplumber sometimes shifts sparse cells left, putting withdrawal
+    # values into the deposits column. Detect and correct this.
+    wd_sum  = df["WITHDRAWAL AMT"].sum()
+    dep_sum = df["DEPOSIT AMT"].sum()
+    wd_zero_pct = (df["WITHDRAWAL AMT"] == 0).mean()
+    if wd_zero_pct > 0.90 and dep_sum > 0 and wd_sum == 0:
+        # Almost every row has 0 withdrawal but deposits have values
+        # Very likely columns are swapped — correct them
+        df["WITHDRAWAL AMT"], df["DEPOSIT AMT"] = df["DEPOSIT AMT"].copy(), df["WITHDRAWAL AMT"].copy()
+
     df = df[(df["WITHDRAWAL AMT"] > 0) | (df["DEPOSIT AMT"] > 0)].copy()
     df.dropna(subset=["DATE"], inplace=True)
     df["CATEGORY"] = df["TRANSACTION DETAILS"].apply(categorize)
