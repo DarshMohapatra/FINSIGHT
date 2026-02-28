@@ -10,9 +10,9 @@ from sklearn.preprocessing import StandardScaler
 from groq import Groq
 try:
     import pdfplumber
-    PDF_SUPPORT = True
+    PDF_OK = True
 except ImportError:
-    PDF_SUPPORT = False
+    PDF_OK = False
 
 st.set_page_config(page_title="FinSight", page_icon="⚡", layout="wide", initial_sidebar_state="collapsed")
 
@@ -22,8 +22,8 @@ st.markdown("""
 *{box-sizing:border-box;}
 .stApp{background:#020408!important;color:#e8eaf0!important;font-family:'Syne',sans-serif!important;}
 footer,#MainMenu,header{display:none!important;}
-.block-container{padding:0!important;max-width:100vw!important;width:100vw!important;} iframe{width:100vw!important;min-width:100vw!important;border:none!important;display:block!important;margin:0!important;} [data-testid='stAppViewContainer']>div:first-child{padding:0!important;} iframe{width:100%!important;min-width:100%!important;border:none!important;}
-.stButton>button{background:linear-gradient(135deg,#00f5a0,#00d4ff)!important;color:#000!important;font-weight:700!important;border:none!important;border-radius:10px!important;padding:14px 32px!important;font-size:15px!important;width:100%!important;} div[data-testid='stVerticalBlock'] > div:has(.stButton){height:0!important;overflow:hidden!important;} div[data-testid='stVerticalBlock'] > div:has(.stButton){height:0!important;overflow:hidden!important;}
+.block-container{padding:0!important;max-width:100%!important;}
+.stButton>button{background:linear-gradient(135deg,#00f5a0,#00d4ff)!important;color:#000!important;font-weight:700!important;border:none!important;border-radius:10px!important;padding:14px 32px!important;font-size:15px!important;width:100%!important;}
 .stButton>button:hover{transform:translateY(-2px)!important;box-shadow:0 8px 32px rgba(0,245,160,0.3)!important;}
 .stTabs [data-baseweb="tab-list"]{background:transparent!important;border-bottom:1px solid rgba(255,255,255,0.06)!important;padding:0 40px!important;}
 .stTabs [data-baseweb="tab"]{background:transparent!important;color:rgba(255,255,255,0.3)!important;font-family:'DM Mono',monospace!important;font-size:11px!important;letter-spacing:2px!important;text-transform:uppercase!important;padding:16px 24px!important;border:none!important;}
@@ -115,237 +115,101 @@ def normalize_columns(df):
     return df
 
 
-
-# ─── Bank-specific PDF column patterns ───────────────────────────────────────
-BANK_PATTERNS = {
-    "SBI": {
-        "date": ["Txn Date", "Date"],
-        "details": ["Description", "Particulars", "Narration"],
-        "debit": ["Debit", "Withdrawal Amt", "Dr"],
-        "credit": ["Credit", "Deposit Amt", "Cr"],
-        "balance": ["Balance", "Balance Amt"],
-    },
-    "HDFC": {
-        "date": ["Date", "Value Dt"],
-        "details": ["Narration", "Description", "Particulars"],
-        "debit": ["Withdrawal Amt (Dr)", "Debit", "Dr"],
-        "credit": ["Deposit Amt (Cr)", "Credit", "Cr"],
-        "balance": ["Closing Balance", "Balance"],
-    },
-    "ICICI": {
-        "date": ["Transaction Date", "Txn Date", "Date"],
-        "details": ["Transaction Remarks", "Particulars", "Description"],
-        "debit": ["Withdrawal Amount (INR )", "Debit", "Dr Amount"],
-        "credit": ["Deposit Amount (INR )", "Credit", "Cr Amount"],
-        "balance": ["Balance (INR )", "Balance"],
-    },
-    "AXIS": {
-        "date": ["Tran Date", "Trans Date", "Date"],
-        "details": ["Particulars", "Description", "Narration"],
-        "debit": ["Dr", "Debit", "Withdrawal"],
-        "credit": ["Cr", "Credit", "Deposit"],
-        "balance": ["Balance", "Bal"],
-    },
-    "KOTAK": {
-        "date": ["Transaction Date", "Date"],
-        "details": ["Description", "Narration", "Particulars"],
-        "debit": ["Debit", "Dr"],
-        "credit": ["Credit", "Cr"],
-        "balance": ["Balance"],
-    },
-}
-
-def _clean_amount(val):
-    """Convert messy amount strings like 1,23,456.78 or (500.00) to float."""
-    if val is None or str(val).strip() in ["", "-", "None"]:
-        return 0.0
-    s = str(val).strip().replace(",", "").replace(" ", "")
-    negative = s.startswith("(") and s.endswith(")")
-    s = s.strip("()").replace("Dr", "").replace("Cr", "").strip()
-    try:
-        result = float(s)
-        return -result if negative else result
-    except:
-        return 0.0
-
-def _find_col(df_cols, candidates):
-    """Case-insensitive column finder."""
-    cols_upper = {c.upper().strip(): c for c in df_cols}
-    for cand in candidates:
-        key = cand.upper().strip()
-        if key in cols_upper:
-            return cols_upper[key]
-        # partial match
-        for cu, co in cols_upper.items():
-            if key in cu or cu in key:
-                return co
-    return None
-
-def parse_pdf(uploaded_file, password=""):
-    """
-    Extract transactions from a password-protected or open PDF bank statement.
-    Supports SBI, HDFC, ICICI, Axis, Kotak and most other Indian banks.
-    Returns a DataFrame with standard columns ready for process_file().
-    """
-    if not PDF_SUPPORT:
-        raise ValueError("pdfplumber not installed. Please check requirements.txt.")
-
+def parse_pdf(f, pwd=""):
     import io
-    pdf_bytes = uploaded_file.read()
-    uploaded_file.seek(0)  # reset for any future reads
-
-    # ── Try opening (with or without password) ────────────────────────────
-    open_kwargs = {"password": password} if password.strip() else {}
+    if not PDF_OK:
+        raise ValueError("pdfplumber not installed.")
+    raw = f.read(); f.seek(0)
+    kw = {"password": pwd} if pwd.strip() else {}
     try:
-        pdf = pdfplumber.open(io.BytesIO(pdf_bytes), **open_kwargs)
+        pdf = pdfplumber.open(io.BytesIO(raw), **kw)
     except Exception as e:
-        err = str(e).lower()
-        if "password" in err or "encrypt" in err or "incorrect" in err:
-            raise ValueError("❌ Wrong password or file is encrypted. Please enter the correct password.")
-        raise ValueError(f"❌ Could not open PDF: {e}")
-
-    # ── Extract all tables from all pages ─────────────────────────────────
-    all_tables = []
+        if any(w in str(e).lower() for w in ["password","encrypt","incorrect"]):
+            raise ValueError("Wrong password. Try PAN number, DOB (DDMMYYYY), or account number.")
+        raise ValueError(f"Cannot open PDF: {e}")
+    tables = []
     with pdf:
-        for page in pdf.pages:
-            tables = page.extract_tables()
-            for t in tables:
-                if t and len(t) > 1:  # need at least header + 1 row
-                    all_tables.append(t)
-
-    if not all_tables:
-        raise ValueError(
-            "❌ No tables found in this PDF. The bank statement may be scanned/image-based. "
-            "Please download the digital (non-scanned) version from NetBanking, or use CSV/Excel."
-        )
-
-    # ── Find the transaction table (largest table with financial columns) ──
-    best_df = None
-    best_score = 0
-
-    FINANCIAL_KEYWORDS = ["date", "amount", "debit", "credit", "balance",
-                          "withdrawal", "deposit", "narration", "particulars",
-                          "description", "transaction", "dr", "cr"]
-
-    for table in all_tables:
-        # Use first non-empty row as header
-        header_row_idx = 0
-        for i, row in enumerate(table):
-            if row and any(cell and str(cell).strip() for cell in row):
-                header_row_idx = i
-                break
-
-        headers = [str(c).strip() if c else f"col_{j}"
-                   for j, c in enumerate(table[header_row_idx])]
-        data_rows = table[header_row_idx + 1:]
-
-        if len(data_rows) < 2:
-            continue
-
-        # Score: how many headers match financial keywords
-        score = sum(1 for h in headers
-                    if any(kw in h.lower() for kw in FINANCIAL_KEYWORDS))
-        score += len(data_rows) * 0.1  # prefer larger tables
-
+        for pg in pdf.pages:
+            for t in (pg.extract_tables() or []):
+                if t and len(t) > 2:
+                    tables.append(t)
+    if not tables:
+        raise ValueError("No tables found in PDF. Please download the digital (non-scanned) statement from NetBanking, or use CSV/Excel.")
+    FIN_KW = ["date","debit","credit","balance","withdrawal","deposit","narration","particulars","description","amount","dr","cr"]
+    best, best_score = None, 0
+    for tbl in tables:
+        hi = next((i for i,r in enumerate(tbl) if r and any(c and str(c).strip() for c in r)), 0)
+        hdrs = [str(c).strip() if c else f"c{j}" for j,c in enumerate(tbl[hi])]
+        rows = tbl[hi+1:]
+        if len(rows) < 2: continue
+        score = sum(1 for h in hdrs if any(k in h.lower() for k in FIN_KW)) + len(rows)*0.05
         if score > best_score:
             best_score = score
-            try:
-                best_df = pd.DataFrame(data_rows, columns=headers)
-            except Exception:
-                continue
-
-    if best_df is None or best_df.empty:
-        raise ValueError("❌ Found tables but could not identify transaction data. Try CSV/Excel format.")
-
-    # ── Drop fully empty rows and columns ─────────────────────────────────
-    best_df = best_df.dropna(how="all").reset_index(drop=True)
-    best_df = best_df.loc[:, best_df.notna().any()]
-
-    # ── Try to map columns using bank patterns, then fall back to generic ──
-    headers_upper = {h.upper().strip(): h for h in best_df.columns}
-
-    date_col    = _find_col(best_df.columns, ["Date", "Txn Date", "Transaction Date",
-                                               "Tran Date", "Trans Date", "Value Date", "Timestamp"])
-    detail_col  = _find_col(best_df.columns, ["Narration", "Description", "Particulars",
-                                               "Transaction Remarks", "Remarks", "Details",
-                                               "Transaction Details"])
-    debit_col   = _find_col(best_df.columns, ["Withdrawal Amt (Dr)", "Withdrawal Amt",
-                                               "Withdrawal", "Debit", "Dr", "Dr Amount",
-                                               "Debit Amount", "Amount Debited"])
-    credit_col  = _find_col(best_df.columns, ["Deposit Amt (Cr)", "Deposit Amt",
-                                               "Deposit", "Credit", "Cr", "Cr Amount",
-                                               "Credit Amount", "Amount Credited"])
-    balance_col = _find_col(best_df.columns, ["Balance", "Closing Balance", "Balance Amt",
-                                               "Running Balance", "Bal"])
-
-    # ── Special: some banks use single "Amount" + "Dr/Cr" type column ─────
-    amount_col = _find_col(best_df.columns, ["Amount", "Transaction Amount"])
-    type_col   = _find_col(best_df.columns, ["Type", "Cr/Dr", "Dr/Cr", "Txn Type", "Trans Type"])
-
-    missing = []
-    if not date_col:    missing.append("Date")
-    if not detail_col:  missing.append("Description/Narration")
-    if not date_col or not (debit_col or credit_col or amount_col):
-        raise ValueError(
-            f"❌ Could not identify required columns in this PDF. "
-            f"Missing: {missing}. "
-            f"Columns found: {list(best_df.columns)}. "
-            f"Please use CSV/Excel instead."
-        )
-
-    # ── Build standardized DataFrame ───────────────────────────────────────
-    result = pd.DataFrame()
-    result["DATE"] = best_df[date_col]
-
-    if detail_col:
-        result["TRANSACTION DETAILS"] = best_df[detail_col].fillna("").astype(str)
+            try: best = (hdrs, rows)
+            except: pass
+    if not best:
+        raise ValueError("Could not find transaction table in PDF. Try CSV/Excel.")
+    hdrs, rows = best
+    def clean(v):
+        if v is None or str(v).strip() in ["","-","None"]: return 0.0
+        s = str(v).replace(",","").replace(" ","").strip()
+        neg = s.startswith("(") and s.endswith(")")
+        s = s.strip("()").replace("Dr","").replace("Cr","")
+        try: return (-1 if neg else 1)*float(s)
+        except: return 0.0
+    def fcol(df, cands):
+        up = {c.upper().strip():c for c in df.columns}
+        for ca in cands:
+            k = ca.upper().strip()
+            if k in up: return up[k]
+            for u,c in up.items():
+                if k in u or u in k: return c
+        return None
+    try:
+        df = pd.DataFrame(rows, columns=hdrs).dropna(how="all")
+    except Exception as e:
+        raise ValueError(f"Could not parse PDF table: {e}")
+    date_c = fcol(df, ["Date","Txn Date","Transaction Date","Tran Date","Value Date","Trans Date"])
+    det_c  = fcol(df, ["Narration","Description","Particulars","Transaction Remarks","Details","Transaction Details","Remarks"])
+    dr_c   = fcol(df, ["Withdrawal Amt (Dr)","Withdrawal Amt","Withdrawal","Debit","Dr","Dr Amount","Debit Amount"])
+    cr_c   = fcol(df, ["Deposit Amt (Cr)","Deposit Amt","Deposit","Credit","Cr","Cr Amount","Credit Amount"])
+    bal_c  = fcol(df, ["Balance","Closing Balance","Balance Amt","Running Balance"])
+    amt_c  = fcol(df, ["Amount","Transaction Amount"])
+    typ_c  = fcol(df, ["Type","Cr/Dr","Dr/Cr","Txn Type","Trans Type"])
+    if not date_c:
+        raise ValueError(f"Could not find Date column. Found: {list(df.columns)}. Try CSV/Excel.")
+    out = pd.DataFrame()
+    out["DATE"] = df[date_c]
+    out["TRANSACTION DETAILS"] = df[det_c].fillna("").astype(str) if det_c else "TRANSACTION"
+    if dr_c and cr_c:
+        out["WITHDRAWAL AMT"] = df[dr_c].apply(clean)
+        out["DEPOSIT AMT"]    = df[cr_c].apply(clean)
+    elif amt_c and typ_c:
+        amts = df[amt_c].apply(clean)
+        typs = df[typ_c].astype(str).str.upper()
+        out["WITHDRAWAL AMT"] = amts.where(typs.str.contains("DR|DEBIT"), 0)
+        out["DEPOSIT AMT"]    = amts.where(typs.str.contains("CR|CREDIT"), 0)
+    elif amt_c:
+        amts = df[amt_c].apply(clean)
+        out["WITHDRAWAL AMT"] = amts.apply(lambda x: abs(x) if x<0 else 0)
+        out["DEPOSIT AMT"]    = amts.apply(lambda x: x if x>0 else 0)
     else:
-        result["TRANSACTION DETAILS"] = "TRANSACTION"
-
-    if debit_col and credit_col:
-        result["WITHDRAWAL AMT"] = best_df[debit_col].apply(_clean_amount)
-        result["DEPOSIT AMT"]    = best_df[credit_col].apply(_clean_amount)
-    elif amount_col and type_col:
-        # Single amount column with type indicator
-        amounts = best_df[amount_col].apply(_clean_amount)
-        types   = best_df[type_col].astype(str).str.upper()
-        result["WITHDRAWAL AMT"] = amounts.where(types.str.contains("DR|DEBIT|D"), 0)
-        result["DEPOSIT AMT"]    = amounts.where(types.str.contains("CR|CREDIT|C"), 0)
-    elif amount_col:
-        # Try to infer from sign (negative = debit)
-        amounts = best_df[amount_col].apply(_clean_amount)
-        result["WITHDRAWAL AMT"] = amounts.apply(lambda x: abs(x) if x < 0 else 0)
-        result["DEPOSIT AMT"]    = amounts.apply(lambda x: x if x > 0 else 0)
-    else:
-        result["WITHDRAWAL AMT"] = 0
-        result["DEPOSIT AMT"]    = 0
-
-    if balance_col:
-        result["BALANCE AMT"] = best_df[balance_col].apply(_clean_amount)
-    else:
-        result["BALANCE AMT"] = 0
-
-    # ── Remove header repetition rows (banks repeat headers mid-PDF) ───────
-    result = result[result["DATE"].astype(str).str.strip().str.lower() != "date"]
-    result = result[~result["DATE"].astype(str).str.strip().str.lower().isin(
-        ["date", "txn date", "transaction date", "tran date", "value date", ""]
-    )]
-
-    if result.empty:
-        raise ValueError("❌ PDF parsed but no valid transaction rows found after cleaning.")
-
-    return result
+        out["WITHDRAWAL AMT"] = 0
+        out["DEPOSIT AMT"]    = 0
+    out["BALANCE AMT"] = df[bal_c].apply(clean) if bal_c else 0
+    bad = ["date","txn date","transaction date","tran date","value date",""]
+    out = out[~out["DATE"].astype(str).str.strip().str.lower().isin(bad)]
+    if out.empty:
+        raise ValueError("PDF parsed but no valid rows found. Try CSV/Excel.")
+    return out
 
 
-def process_file(uploaded, pdf_password=''):
+def process_file(uploaded, pdf_password=""):
     if uploaded.name.lower().endswith(".pdf"):
         df = parse_pdf(uploaded, pdf_password)
-        # PDF parser already returns standardized columns — run normalize anyway for safety
-        try:
-            df = normalize_columns(df)
-        except Exception:
-            pass  # columns already normalized by parse_pdf
-    elif uploaded.name.endswith(".csv"):
+        try: df = normalize_columns(df)
+        except: pass
+    elif uploaded.name.lower().endswith(".csv"):
         df = pd.read_csv(uploaded)
         df = normalize_columns(df)
     else:
@@ -433,11 +297,16 @@ def build_context(df):
     ctx += "IMPORTANT: Use ONLY this data. Always give specific numbers. Never say data unavailable. Be concise, friendly and actionable."
     return ctx
 
+""")
 
+#  HTML landing page
+with open('/content/app.py', 'a', encoding='utf-8') as f:
+    f.write("""
 LANDING_HTML = open('/mount/src/finsight/landing.html').read() if os.path.exists('/mount/src/finsight/landing.html') else ""
 
 if st.session_state.page == "landing":
     components.html(LANDING_HTML, height=2400, scrolling=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("⚡ Launch App — Analyze My Finances", use_container_width=True):
@@ -462,18 +331,13 @@ else:
         with c1:
             st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin:28px 0 8px;">UPLOAD YOUR FILE</div>', unsafe_allow_html=True)
             st.markdown('<h3 style="font-size:24px;font-weight:700;margin-bottom:8px;">Bank Statement Analyzer</h3>', unsafe_allow_html=True)
-            st.markdown('<p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px;">Upload your bank statement — CSV, Excel, or PDF (password-protected supported). We auto-detect columns and run the full ML pipeline.</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px;">Upload your bank statement — CSV, Excel, or PDF (password protected supported). Auto-detect &amp; full ML pipeline.</p>', unsafe_allow_html=True)
             uploaded = st.file_uploader("", type=["csv", "xlsx", "xls", "pdf"], label_visibility="collapsed")
             pdf_password = ""
             if uploaded and uploaded.name.lower().endswith(".pdf"):
-                st.markdown('<div style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:1px;margin:10px 0 4px;">PDF PASSWORD (if protected)</div>', unsafe_allow_html=True)
-                pdf_password = st.text_input("",
-                    placeholder="e.g. PAN number, DOB (DDMMYYYY), or account number",
-                    type="password",
-                    label_visibility="collapsed",
-                    help="Most Indian bank PDFs are protected. Common passwords: PAN number, Date of Birth (DDMMYYYY), first 4 letters of name + DOB"
-                )
-                st.markdown('<div style="font-size:11px;color:rgba(255,255,255,0.2);font-family:DM Mono,monospace;margin-bottom:10px;">💡 Leave blank if not password protected</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1px;margin:10px 0 4px;">🔒 PDF PASSWORD (if protected)</div>', unsafe_allow_html=True)
+                pdf_password = st.text_input("", placeholder="PAN number / DOB (DDMMYYYY) / account number", type="password", label_visibility="collapsed")
+                st.caption("💡 Leave blank if the PDF has no password")
             if uploaded:
                 if st.button("⚡ Run Analysis", use_container_width=True):
                     with st.spinner("Running ML pipeline..."):
@@ -635,3 +499,170 @@ else:
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + PROPHET + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
+""")
+
+print("app.py written:", len(open('/content/app.py').readlines()), "lines")
+
+# Landing page as a separate HTML file
+with open('/content/landing.html', 'w', encoding='utf-8') as f:
+    f.write("""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#020408;color:#e8eaf0;font-family:'Syne',sans-serif;overflow-x:hidden;}
+.bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,245,160,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,245,160,0.03) 1px,transparent 1px);background-size:60px 60px;animation:gridMove 20s linear infinite;}
+@keyframes gridMove{0%{transform:translateY(0)}100%{transform:translateY(60px)}}
+.orb{position:absolute;border-radius:50%;filter:blur(100px);animation:orbFloat 8s ease-in-out infinite;}
+.o1{width:600px;height:600px;background:radial-gradient(circle,rgba(0,245,160,0.12),transparent 70%);top:-200px;left:-200px;}
+.o2{width:500px;height:500px;background:radial-gradient(circle,rgba(0,212,255,0.10),transparent 70%);top:20%;right:-150px;animation-delay:-3s;}
+.o3{width:400px;height:400px;background:radial-gradient(circle,rgba(123,97,255,0.10),transparent 70%);bottom:10%;left:30%;animation-delay:-6s;}
+@keyframes orbFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-30px)}}
+.wrap{max-width:1100px;margin:0 auto;padding:0 48px;position:relative;z-index:1;}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:18px 0;background:rgba(2,4,8,0.8);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.06);}
+.nav-inner{max-width:1100px;margin:0 auto;padding:0 48px;display:flex;align-items:center;justify-content:space-between;}
+.logo{font-size:20px;font-weight:800;background:linear-gradient(135deg,#00f5a0,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.nav-links{display:flex;gap:28px;align-items:center;}
+.nav-links a{color:rgba(255,255,255,0.4);text-decoration:none;font-size:13px;font-family:'DM Mono',monospace;transition:color 0.2s;}
+.nav-links a:hover{color:#00f5a0;}
+.hero{min-height:100vh;display:flex;align-items:center;padding-top:80px;}
+.badge{display:inline-flex;align-items:center;gap:8px;background:rgba(0,245,160,0.08);border:1px solid rgba(0,245,160,0.2);border-radius:100px;padding:7px 16px;margin-bottom:28px;font-family:'DM Mono',monospace;font-size:11px;color:#00f5a0;letter-spacing:1px;}
+.dot{width:6px;height:6px;background:#00f5a0;border-radius:50%;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+h1{font-size:clamp(52px,7vw,88px);font-weight:800;letter-spacing:-3px;line-height:1.0;margin-bottom:20px;}
+.grad{background:linear-gradient(135deg,#00f5a0,#00d4ff,#7b61ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-size:200%;animation:gradShift 3s linear infinite;}
+@keyframes gradShift{0%{background-position:0% center}100%{background-position:200% center}}
+.desc{font-size:18px;color:rgba(232,234,240,0.5);line-height:1.7;max-width:540px;margin-bottom:36px;}
+.actions{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:56px;}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:16px 32px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none;transition:all 0.2s;cursor:pointer;font-family:'Syne',sans-serif;border:none;}
+.btn-p{background:linear-gradient(135deg,#00f5a0,#00d4ff);color:#000;box-shadow:0 0 40px rgba(0,245,160,0.3);}
+.btn-p:hover{transform:translateY(-2px);box-shadow:0 0 60px rgba(0,245,160,0.5);}
+.btn-s{color:rgba(232,234,240,0.5);border:1px solid rgba(255,255,255,0.08)!important;background:rgba(255,255,255,0.03);}
+.btn-s:hover{border-color:#00d4ff!important;color:#00d4ff;}
+.stats{display:flex;gap:40px;flex-wrap:wrap;}
+.stat{border-left:1px solid rgba(255,255,255,0.08);padding-left:20px;}
+.stat-num{font-size:28px;font-weight:800;background:linear-gradient(135deg,#00f5a0,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-1px;}
+.stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);font-family:'DM Mono',monospace;margin-top:4px;}
+.section{padding:100px 0;}
+.sec-label{font-family:'DM Mono',monospace;font-size:11px;color:#00f5a0;letter-spacing:3px;text-transform:uppercase;margin-bottom:14px;}
+.sec-title{font-size:clamp(36px,5vw,54px);font-weight:800;letter-spacing:-2px;line-height:1.1;margin-bottom:56px;}
+.grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;background:rgba(255,255,255,0.06);border-radius:24px;overflow:hidden;}
+.feat{background:#020408;padding:44px;transition:background 0.3s;}
+.feat:hover{background:rgba(255,255,255,0.02);}
+.ficon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:18px;}
+.ig{background:rgba(0,245,160,0.1);border:1px solid rgba(0,245,160,0.2);}
+.ir{background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.2);}
+.ib{background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);}
+.ip{background:rgba(123,97,255,0.1);border:1px solid rgba(123,97,255,0.2);}
+.fn{font-family:'DM Mono',monospace;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:2px;margin-bottom:10px;}
+.ft{font-size:20px;font-weight:700;margin-bottom:10px;letter-spacing:-0.5px;}
+.fd{font-size:14px;color:rgba(232,234,240,0.45);line-height:1.7;}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px;}
+.tag{font-family:'DM Mono',monospace;font-size:10px;padding:3px 9px;border-radius:100px;border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.25);}
+.steps-wrap{max-width:660px;margin:0 auto;}
+.step{display:flex;gap:28px;padding:36px 0;border-bottom:1px solid rgba(255,255,255,0.06);}
+.step:last-child{border:none;}
+.snum{font-family:'DM Mono',monospace;font-size:48px;font-weight:300;color:rgba(255,255,255,0.05);flex-shrink:0;width:70px;text-align:right;}
+.stag{display:inline-block;font-family:'DM Mono',monospace;font-size:10px;color:#00f5a0;letter-spacing:2px;margin-bottom:8px;}
+.step h3{font-size:21px;font-weight:700;letter-spacing:-0.5px;margin-bottom:8px;}
+.step p{color:rgba(232,234,240,0.45);line-height:1.7;font-size:14px;}
+.chat-box{max-width:660px;margin:0 auto;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:24px;overflow:hidden;}
+.chat-hdr{padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px;}
+.chat-av{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#00f5a0,#00d4ff);display:flex;align-items:center;justify-content:center;font-size:16px;}
+.chat-name{font-size:14px;font-weight:600;}
+.chat-status{font-size:11px;color:#00f5a0;font-family:'DM Mono',monospace;}
+.messages{padding:22px;display:flex;flex-direction:column;gap:14px;}
+.msg{max-width:82%;}
+.msg.u{align-self:flex-end;}
+.msg.ai{align-self:flex-start;}
+.bubble{padding:13px 17px;border-radius:16px;font-size:13px;line-height:1.6;}
+.msg.u .bubble{background:linear-gradient(135deg,#00f5a0,#00d4ff);color:#000;font-weight:500;border-bottom-right-radius:4px;}
+.msg.ai .bubble{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-bottom-left-radius:4px;}
+.mt{font-size:10px;color:rgba(255,255,255,0.25);font-family:'DM Mono',monospace;margin-top:5px;padding:0 3px;}
+.msg.u .mt{text-align:right;}
+.cta-box{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:28px;padding:72px;text-align:center;position:relative;overflow:hidden;}
+.cta-glow{position:absolute;width:400px;height:400px;background:radial-gradient(circle,rgba(0,245,160,0.07),transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+.reveal{opacity:0;transform:translateY(30px);transition:all 0.7s ease;}
+.reveal.on{opacity:1;transform:translateY(0);}
+@keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.anim{animation:fadeUp 0.6s ease both;}
+</style>
+</head>
+<body>
+<div class="bg"><div class="grid"></div><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+<nav><div class="nav-inner">
+  <div class="logo">⚡FinSight</div>
+  <div class="nav-links"><a href="#features">Features</a><a href="#how">How it works</a><a href="#chat">AI Advisor</a></div>
+</div></nav>
+<section class="hero"><div class="wrap">
+  <div class="badge anim"><div class="dot"></div> POWERED BY LLAMA 3.3 + ISOLATION FOREST</div>
+  <h1 class="anim" style="animation-delay:0.1s">Your Money,<br><span class="grad">Understood.</span></h1>
+  <p class="desc anim" style="animation-delay:0.2s">Upload your bank statement. FinSight reads every transaction, flags anomalies, forecasts your future, and gives you a personal AI advisor — in seconds.</p>
+  <div class="actions anim" style="animation-delay:0.3s">
+    <a href="#cta" class="btn btn-p">⚡ Analyze My Finances</a>
+    <a href="#features" class="btn btn-s">→ See How It Works</a>
+  </div>
+  <div class="stats anim" style="animation-delay:0.4s">
+    <div class="stat"><div class="stat-num" data-target="113">0</div><div class="stat-lbl">K+ TRANSACTIONS ANALYZED</div></div>
+    <div class="stat"><div class="stat-num" data-target="78">0</div><div class="stat-lbl">% AUTO-CATEGORIZED</div></div>
+    <div class="stat"><div class="stat-num" data-target="2275">0</div><div class="stat-lbl">ANOMALIES FLAGGED</div></div>
+  </div>
+</div></section>
+<section class="section" id="features"><div class="wrap">
+  <div class="sec-label reveal">CAPABILITIES</div>
+  <h2 class="sec-title reveal">Four AI engines.<br><span class="grad">One platform.</span></h2>
+  <div class="grid4 reveal">
+    <div class="feat"><div class="ficon ig">🧠</div><div class="fn">01 / 04</div><div class="ft">NLP Transaction Categorizer</div><div class="fd">Every transaction auto-labeled using keyword-aware NLP. 78.4% coverage out of the box.</div><div class="tags"><span class="tag">NLP</span><span class="tag">KEYWORD MATCHING</span><span class="tag">AUTO-LABEL</span></div></div>
+    <div class="feat"><div class="ficon ir">🚨</div><div class="fn">02 / 04</div><div class="ft">Anomaly Detection Engine</div><div class="fd">Isolation Forest ML model scans every transaction and flags suspicious patterns — unusual amounts, timing spikes.</div><div class="tags"><span class="tag">ISOLATION FOREST</span><span class="tag">SKLEARN</span><span class="tag">REAL-TIME</span></div></div>
+    <div class="feat"><div class="ficon ib">📈</div><div class="fn">03 / 04</div><div class="ft">Expense Forecasting</div><div class="fd">Facebook Prophet predicts your next 6 months of spending with confidence intervals.</div><div class="tags"><span class="tag">PROPHET</span><span class="tag">TIME SERIES</span><span class="tag">6-MONTH</span></div></div>
+    <div class="feat"><div class="ficon ip">🤖</div><div class="fn">04 / 04</div><div class="ft">AI Financial Advisor</div><div class="fd">Powered by LLaMA 3.3 70B. Knows your actual data. Gives personalized, data-backed advice.</div><div class="tags"><span class="tag">LLAMA 3.3</span><span class="tag">GROQ API</span><span class="tag">RAG</span></div></div>
+  </div>
+</div></section>
+<section class="section" id="how"><div class="wrap">
+  <div class="sec-label reveal" style="text-align:center">PROCESS</div>
+  <h2 class="sec-title reveal" style="text-align:center">From statement<br><span class="grad">to insight.</span></h2>
+  <div class="steps-wrap">
+    <div class="step reveal"><div class="snum">01</div><div><div class="stag">UPLOAD</div><h3>Drop your bank statement</h3><p>Upload a CSV or Excel file. Smart parser handles any format automatically.</p></div></div>
+    <div class="step reveal"><div class="snum">02</div><div><div class="stag">ANALYZE</div><h3>AI reads every transaction</h3><p>NLP categorizer, Isolation Forest, and Prophet all run in parallel on your data.</p></div></div>
+    <div class="step reveal"><div class="snum">03</div><div><div class="stag">VISUALIZE</div><h3>Your financial story, visualized</h3><p>Dark dashboard with spending trends, categories, anomaly timeline, and forecast.</p></div></div>
+    <div class="step reveal"><div class="snum">04</div><div><div class="stag">CHAT</div><h3>Ask anything about your money</h3><p>FinSight knows your real data and gives honest, personalized answers.</p></div></div>
+  </div>
+</div></section>
+<section class="section" id="chat"><div class="wrap">
+  <div class="sec-label reveal" style="text-align:center">AI FINANCIAL ADVISOR</div>
+  <h2 class="sec-title reveal" style="text-align:center">Talk to your<br><span class="grad">financial data.</span></h2>
+  <div class="chat-box reveal">
+    <div class="chat-hdr"><div class="chat-av">💡</div><div><div class="chat-name">FinSight AI</div><div class="chat-status"><span style="display:inline-block;width:6px;height:6px;background:#00f5a0;border-radius:50%;margin-right:6px;animation:pulse 2s infinite;"></span>Analyzing your data</div></div></div>
+    <div class="messages">
+      <div class="msg u"><div class="bubble">What is my biggest spending category?</div><div class="mt">Just now</div></div>
+      <div class="msg ai"><div class="bubble">Your biggest category is <strong>Online Payment</strong> at Rs.11,025Cr — 46% of total. Review recurring NEFT transfers to find savings. 💡</div><div class="mt">FinSight AI</div></div>
+      <div class="msg u"><div class="bubble">Give me 3 tips to reduce my spending!</div><div class="mt">Just now</div></div>
+      <div class="msg ai"><div class="bubble">Based on your real data:<br><br>1. Monitor Online Payments — Rs.11,025Cr. Review recurring transfers.<br>2. Consolidate Accounts — Rs.4,248Cr in transfers.<br>3. Break down Other — Rs.1,504Cr untracked. Find hidden leaks.</div><div class="mt">FinSight AI</div></div>
+    </div>
+  </div>
+</div></section>
+<section class="section" id="cta"><div class="wrap">
+  <div class="cta-box reveal">
+    <div class="cta-glow"></div>
+    <div class="sec-label">GET STARTED FREE</div>
+    <h2 class="sec-title" style="margin-bottom:16px;">Your finances deserve<br><span class="grad">real intelligence.</span></h2>
+    <p style="font-size:17px;color:rgba(232,234,240,0.45);margin-bottom:40px;line-height:1.7;">Get your complete AI-powered financial analysis in under 60 seconds.</p>
+  </div>
+</div></section>
+<div style="border-top:1px solid rgba(255,255,255,0.06);padding:28px 0;position:relative;z-index:1;">
+<div class="wrap" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+  <div style="font-size:18px;font-weight:800;background:linear-gradient(135deg,#00f5a0,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">⚡FinSight</div>
+  <div style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.2);">ISOLATION FOREST + PROPHET + LLAMA 3.3 70B</div>
+  <a href="https://github.com/DarshMohapatra/FINSIGHT" style="font-family:DM Mono,monospace;font-size:11px;color:rgba(255,255,255,0.3);text-decoration:none;" target="_blank">GitHub</a>
+</div></div>
+<script>
+const reveals = document.querySelectorAll(".reveal");
+const obs = new IntersectionObserver(entries=>{entries.forEach((e,i)=>{if(e.isIntersecting)setTimeout(()=>e.target.classList.add("on"),i*80);});},{threshold:0.1});
+reveals.forEach(r=>obs.observe(r));
+function animCount(el,target){let s=0;const step=ts=>{if(!s)s=ts;const p=Math.min((ts-s)/2000,1);const e=1-Math.pow(1-p,3);el.textContent=Math.floor(e*target).toLocaleString();if(p<1)requestAnimationFrame(step);};requestAnimationFrame(step);}
+setTimeout(()=>{document.querySelectorAll("[data-target]").forEach(n=>animCount(n,parseInt(n.dataset.target)));},500);
+</script>
+</body></html>
