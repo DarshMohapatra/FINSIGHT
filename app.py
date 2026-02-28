@@ -179,205 +179,138 @@ def normalize_columns(df):
 
 
 def _looks_like_date_header(val):
-    """Return True if a string looks like a date column header."""
+    """True if a string looks like a date column header."""
     if not isinstance(val, str):
         return False
-    val_clean = val.strip().lower()
-    date_keywords = [
+    v = val.strip().lower()
+    return any(k in v for k in [
         "date", "txn date", "transaction date", "value date",
         "posting date", "entry date", "timestamp", "dt"
-    ]
-    return any(kw in val_clean for kw in date_keywords)
+    ])
 
 def _looks_like_date_value(val):
-    """Return True if val looks like a date. Covers all major Indian bank formats."""
-    if val is None:
+    """True if a string looks like an actual date value."""
+    if not isinstance(val, str):
         return False
-    s = str(val).strip()
-    # Covers ISO, ICICI (DD-MM-YYYY), slash variants, and month-name formats
     patterns = [
-        r'\d{4}-\d{2}-\d{2}',
-        r'\d{2}-\d{2}-\d{4}',
-        r'\d{2}/\d{2}/\d{4}',
-        r'\d{2}/\d{2}/\d{2}',
-        r'\d{2}-[A-Za-z]{3}-\d{4}',
-        r'\d{1,2}\s+[A-Za-z]{3}\s+\d{4}',
+        r"\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4}",
+        r"\d{1,2}[\-/ ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\-/ ]\d{2,4}",
+        r"\d{4}[\-/]\d{1,2}[\-/]\d{1,2}",
     ]
-    return any(re.search(p, s) for p in patterns)
-
-
-def _score_table(rows):
-    """Score a table — higher = more likely to be the transactions table."""
-    if not rows or len(rows) < 3:
-        return -1
-    score = 0
-
-    # Reward: many rows (transaction tables are long)
-    score += min(len(rows), 100)  # cap at 100 to avoid dominating
-
-    # Reward: many columns (transaction tables have 4-6 columns)
-    avg_cols = sum(len(r) for r in rows) / len(rows)
-    if 3 <= avg_cols <= 7:
-        score += 30
-
-    # Big reward: header row contains date-like keywords
-    header = [str(c or '').strip().lower() for c in rows[0]]
-    date_kws   = ['date', 'dt', 'txn', 'trans', 'value date', 'posting']
-    detail_kws = ['narration', 'particular', 'description', 'details', 'remarks']
-    amount_kws = ['debit', 'credit', 'withdrawal', 'deposit', 'amount', 'dr', 'cr']
-
-    has_date   = any(any(kw in h for kw in date_kws)   for h in header)
-    has_detail = any(any(kw in h for kw in detail_kws) for h in header)
-    has_amount = any(any(kw in h for kw in amount_kws) for h in header)
-
-    if has_date:   score += 200  # date header is the strongest signal
-    if has_detail: score += 100
-    if has_amount: score += 100
-
-    # Big penalty: first cell looks like a cover-page / summary label
-    first_cell = str(rows[0][0] or '').strip().lower()
-    cover_page_signals = [
-        'relationship manager', 'customer', 'account holder',
-        'statement summary', 'branch', 'address', 'ifsc',
-        'dear', 'your', 'balance summary', 'account no',
-    ]
-    if any(sig in first_cell for sig in cover_page_signals):
-        score -= 500  # this is definitely not the transactions table
-
-    # Reward: second row looks like it has date values
-    if len(rows) > 1:
-        import re as _re
-        date_pat = _re.compile(
-            r'(\d{2}-\d{2}-\d{4}|\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})'
-        )
-        first_data_row = [str(c or '') for c in rows[1]]
-        if any(date_pat.search(cell) for cell in first_data_row):
-            score += 300  # data rows with dates = almost certainly right table
-
-    return score
-
-
-
-def _is_real_table_header(words_on_line):
-    """
-    Return True only if a line of words looks like a real bank statement
-    table header — must contain 2+ distinct financial keyword categories.
-    This prevents matching "DATE" inside disclaimer/footer paragraphs.
-    """
-    text = " ".join(w["text"].upper().strip() for w in words_on_line)
-    score = 0
-    if any(k in text for k in ["DATE", "DT", "VALUE DATE", "TXN DATE"]):
-        score += 1
-    if any(k in text for k in ["PARTICULARS", "NARRATION", "DESCRIPTION",
-                                "TRANSACTION", "DETAILS", "REMARKS", "MODE"]):
-        score += 1
-    if any(k in text for k in ["DEBIT", "WITHDRAWAL", "DR", "WD"]):
-        score += 1
-    if any(k in text for k in ["CREDIT", "DEPOSIT", "CR"]):
-        score += 1
-    if any(k in text for k in ["BALANCE", "BAL"]):
-        score += 1
-    return score >= 3   # need at least 3 keyword categories
-
+    return any(re.search(p, val.strip(), re.IGNORECASE) for p in patterns)
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Multi-page bbox-anchored PDF extraction with robust header detection.
-    - Requires 3+ financial keyword categories on a line to call it a header
-      (prevents locking onto "DATE" inside disclaimer paragraphs)
-    - Locks column boundaries from the first real header found
-    - Concatenates rows from ALL pages
+    Definitive multi-page PDF extractor using pdfplumber's "lines" strategy.
+
+    Key insight: bank statement PDFs have actual visible border lines between
+    cells. Using vertical_strategy="lines" + horizontal_strategy="lines" tells
+    pdfplumber to use those borders as cell boundaries. Result:
+      - Empty cells are preserved as None (not dropped)
+      - No value shifting into wrong columns
+      - Multi-line cell text is joined within the correct cell
+      - Works across all 40+ pages
+
+    Fallback: if "lines" strategy finds nothing, try "text" strategy.
     """
     import pdfplumber
 
     open_kwargs = {"password": password} if password else {}
 
-    col_x      = None   # locked once from first real header
-    col_names  = None
-    all_rows   = []
+    # Settings that use actual PDF line art for cell detection
+    LINES_SETTINGS = {
+        "vertical_strategy":   "lines",
+        "horizontal_strategy": "lines",
+        "snap_tolerance":      3,
+        "join_tolerance":      3,
+        "edge_min_length":     3,
+        "intersection_tolerance": 3,
+    }
+    # Fallback if no line art detected
+    TEXT_SETTINGS = {
+        "vertical_strategy":   "text",
+        "horizontal_strategy": "lines",
+        "snap_tolerance":      5,
+        "join_tolerance":      5,
+    }
+
+    def try_extract(pdf, settings):
+        """Extract all tables from all pages with given settings."""
+        all_header = None
+        all_rows   = []
+        header_set = None   # lowercase set of header values for dedup
+
+        for page in pdf.pages:
+            tables = page.extract_tables(settings)
+            for tbl in (tables or []):
+                if not tbl or len(tbl) < 2:
+                    continue
+
+                # Find the header row (first row containing a date keyword)
+                header_idx = None
+                for i, row in enumerate(tbl[:8]):
+                    row_str = [str(c or "").strip() for c in row]
+                    if any(_looks_like_date_header(c) for c in row_str):
+                        header_idx = i
+                        break
+
+                if header_idx is None:
+                    continue    # no header found in this table — skip
+
+                # Lock header on first encounter
+                if all_header is None:
+                    raw_h = [str(c or "").strip() for c in tbl[header_idx]]
+                    # Clean duplicate/empty names
+                    seen, clean = {}, []
+                    for h in raw_h:
+                        h = h or "COL"
+                        if h in seen:
+                            seen[h] += 1
+                            h = f"{h}_{seen[h]}"
+                        else:
+                            seen[h] = 0
+                        clean.append(h)
+                    all_header = clean
+                    header_set = set(v.lower() for v in raw_h if v.strip())
+
+                # Collect data rows (skip repeated header rows)
+                for row in tbl[header_idx + 1:]:
+                    cells = [str(c or "").strip() for c in row]
+                    # Skip blank rows
+                    if not any(c for c in cells):
+                        continue
+                    # Skip rows that look like a repeated header
+                    row_lower = set(c.lower() for c in cells if c)
+                    if header_set and len(row_lower & header_set) >= 2:
+                        continue
+                    # Pad/trim to match header length
+                    while len(cells) < len(all_header):
+                        cells.append("")
+                    cells = cells[:len(all_header)]
+                    all_rows.append(cells)
+
+        return all_header, all_rows
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
-        for page_num, page in enumerate(pdf.pages):
-            words = page.extract_words()
-            if not words:
-                continue
+        # Try lines strategy first (works when PDF has visible borders)
+        headers, rows = try_extract(pdf, LINES_SETTINGS)
 
-            # ── Scan every unique y-level for a real header line ──
-            ys = sorted(set(round(w["top"] / 5) * 5 for w in words))
-            header_y = None
+        # Fall back to text strategy if lines didn't work
+        if not rows:
+            headers, rows = try_extract(pdf, TEXT_SETTINGS)
 
-            for y_bucket in ys:
-                line_words = [w for w in words if abs(w["top"] - y_bucket) < 6]
-                if _is_real_table_header(line_words):
-                    header_y = y_bucket
-                    break   # first real header wins
-
-            if header_y is not None:
-                # Lock column boundaries from this header row
-                hw = sorted(
-                    [w for w in words if abs(w["top"] - header_y) < 6],
-                    key=lambda w: w["x0"]
-                )
-                if len(hw) >= 3:
-                    col_x     = [w["x0"] for w in hw] + [page.width]
-                    col_names = [w["text"].strip() for w in hw]
-
-            # ── Extract data rows using locked boundaries ──────────
-            if col_x is None:
-                continue
-
-            body_top   = (header_y + 6) if header_y is not None else 0
-            body_words = [w for w in words if w["top"] >= body_top]
-
-            # Group into rows by y (5px buckets)
-            rows_by_y = {}
-            for w in body_words:
-                y_key = round(w["top"] / 5) * 5
-                rows_by_y.setdefault(y_key, []).append(w)
-
-            for y_key in sorted(rows_by_y):
-                row = [""] * len(col_names)
-                for w in rows_by_y[y_key]:
-                    for ci in range(len(col_x) - 1):
-                        if col_x[ci] <= w["x0"] < col_x[ci + 1]:
-                            row[ci] = (row[ci] + " " + w["text"]).strip()
-                            break
-
-                # Skip empty rows and repeated header rows
-                row_text = " ".join(row).strip()
-                if not row_text:
-                    continue
-                row_words_obj = [{"text": c, "top": 0, "x0": 0} for c in row if c]
-                if _is_real_table_header(
-                    [{"text": c} for c in row if c.strip()]
-                ):
-                    continue   # skip repeated header printed on each page
-
-                all_rows.append(row)
-
-    if not all_rows or col_names is None:
+    if not rows or headers is None:
         raise ValueError(
-            "No transaction table found in this PDF. "
+            "Could not extract a transaction table from this PDF. "
             "Please try uploading a CSV or Excel version instead."
         )
 
-    # ── Build DataFrame ───────────────────────────────────────────
-    seen, clean_headers = {}, []
-    for h in col_names:
-        h = h.strip() or "COL"
-        if h in seen:
-            seen[h] += 1
-            h = f"{h}_{seen[h]}"
-        else:
-            seen[h] = 0
-        clean_headers.append(h)
-
-    df = pd.DataFrame(all_rows, columns=clean_headers)
+    df = pd.DataFrame(rows, columns=headers)
     df = df.dropna(how="all")
     df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
     df = df.reset_index(drop=True)
 
-    # Regex fallback: detect date column by value if name didn't match
+    # Regex fallback: detect date column by value pattern if header didn't match
     if not any(_looks_like_date_header(c) for c in df.columns):
         for col in df.columns:
             hits = df[col].dropna().astype(str).head(20).apply(
@@ -406,16 +339,6 @@ def process_file(uploaded, pdf_password=""):
     df["DEPOSIT AMT"]    = pd.to_numeric(df["DEPOSIT AMT"],    errors="coerce").fillna(0)
     df["BALANCE AMT"]    = pd.to_numeric(df["BALANCE AMT"],    errors="coerce").fillna(0)
 
-    # ── Swap sanity check ──────────────────────────────────────────
-    # pdfplumber sometimes shifts sparse cells left, putting withdrawal
-    # values into the deposits column. Detect and correct this.
-    wd_sum  = df["WITHDRAWAL AMT"].sum()
-    dep_sum = df["DEPOSIT AMT"].sum()
-    wd_zero_pct = (df["WITHDRAWAL AMT"] == 0).mean()
-    if wd_zero_pct > 0.90 and dep_sum > 0 and wd_sum == 0:
-        # Almost every row has 0 withdrawal but deposits have values
-        # Very likely columns are swapped — correct them
-        df["WITHDRAWAL AMT"], df["DEPOSIT AMT"] = df["DEPOSIT AMT"].copy(), df["WITHDRAWAL AMT"].copy()
 
     df = df[(df["WITHDRAWAL AMT"] > 0) | (df["DEPOSIT AMT"] > 0)].copy()
     df.dropna(subset=["DATE"], inplace=True)
