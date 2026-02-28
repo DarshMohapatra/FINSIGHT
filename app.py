@@ -340,9 +340,17 @@ def process_file(uploaded, pdf_password=""):
         df = pd.read_excel(uploaded)
         df = normalize_columns(df)
     df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
-    df["WITHDRAWAL AMT"] = pd.to_numeric(df["WITHDRAWAL AMT"], errors="coerce").fillna(0)
-    df["DEPOSIT AMT"]    = pd.to_numeric(df["DEPOSIT AMT"],    errors="coerce").fillna(0)
-    df["BALANCE AMT"]    = pd.to_numeric(df["BALANCE AMT"],    errors="coerce").fillna(0)
+
+    # Strip commas and currency symbols before numeric conversion
+    # e.g. "1,199.00" → "1199.00", "Rs.294" → "294"
+    def clean_amount(series):
+        return (series.astype(str)
+                      .str.replace(r"[,₹$£€Rs.\s]", "", regex=True)
+                      .str.strip())
+
+    df["WITHDRAWAL AMT"] = pd.to_numeric(clean_amount(df["WITHDRAWAL AMT"]), errors="coerce").fillna(0)
+    df["DEPOSIT AMT"]    = pd.to_numeric(clean_amount(df["DEPOSIT AMT"]),    errors="coerce").fillna(0)
+    df["BALANCE AMT"]    = pd.to_numeric(clean_amount(df["BALANCE AMT"]),    errors="coerce").fillna(0)
 
 
     df = df[(df["WITHDRAWAL AMT"] > 0) | (df["DEPOSIT AMT"] > 0)].copy()
