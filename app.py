@@ -260,113 +260,102 @@ def _score_table(rows):
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Extract transaction table from a bank statement PDF.
-    Handles ICICI, HDFC, Axis, SBI multi-page statements.
+    Extract transactions from ICICI (and similar) bank statement PDFs.
+    Uses text extraction + regex since pdfplumber extract_tables() only
+    captures the header row (1 row/page) — the data rows are plain text.
     """
     import pdfplumber
     import pandas as pd
     import re as _re
 
-    # Matches DD-MM-YYYY, YYYY-MM-DD, DD/MM/YYYY, DD/MM/YY
-    DATE_RE = _re.compile(
-        r'(\d{2}-\d{2}-\d{4}|\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}|\d{2}/\d{2}/\d{2})'
-    )
-
-    def has_date_value(table):
-        """Return True if any cell in first 5 rows matches a date pattern."""
-        for row in table[:5]:
-            for cell in row:
-                if cell and DATE_RE.search(str(cell)):
-                    return True
-        return False
+    # ICICI transaction line:
+    # 01-02-2023  [optional mode like UPI/BIL]  narration text  deposits  withdrawals  balance
+    # Date is always DD-MM-YYYY at the start of a transaction line
+    DATE_PAT  = _re.compile(r'^(\d{2}-\d{2}-\d{4})')
+    # Amount pattern: Indian number format like 1,23,456.78 or 0.00
+    AMT_PAT   = _re.compile(r'[\d,]+\.\d{2}')
 
     open_kwargs = {"password": password} if password else {}
-
-    header      = None
-    n_cols      = None
-    all_rows    = []
-    locked      = False   # True once we've found the transactions table
+    rows = []
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
         for page in pdf.pages:
-            for tbl in (page.extract_tables() or []):
-                if not tbl or len(tbl) < 2:
+            text = page.extract_text()
+            if not text:
+                continue
+            for line in text.splitlines():
+                line = line.strip()
+                # Every transaction line starts with DD-MM-YYYY
+                if not DATE_PAT.match(line):
                     continue
-
-                if not locked:
-                    # Skip tables without date values — they're cover/summary tables
-                    if not has_date_value(tbl):
-                        continue
-
-                    # Found the transactions table — lock onto it
-                    locked = True
-                    n_cols = max(len(r) for r in tbl)
-
-                    # Determine header: first row without a date value = header row
-                    start = 0
-                    first_row = [str(c or '').strip() for c in tbl[0]]
-                    if not any(DATE_RE.search(c) for c in first_row):
-                        header = first_row
-                        start  = 1
+                # Extract all amounts from the line
+                amounts = AMT_PAT.findall(line)
+                if len(amounts) < 2:
+                    continue  # need at least withdrawal/deposit + balance
+                # Date is first 10 chars
+                date = line[:10].strip()
+                # Balance is always the last amount
+                balance = amounts[-1]
+                # Second-to-last amount is either deposit or withdrawal
+                # We determine which by checking the line for context
+                second_amt = amounts[-2]
+                # Everything between date and the first amount is the narration
+                first_amt_idx = line.index(amounts[0])
+                narration = line[10:first_amt_idx].strip()
+                # Figure out deposit vs withdrawal
+                # ICICI format: ... DEPOSITS  WITHDRAWALS  BALANCE
+                # So amounts[-3]=deposit, amounts[-2]=withdrawal if 3+ amounts
+                # But many lines have only 2 amounts (one is 0.00 which gets skipped by regex if literally 0.00)
+                # Safer: look at position in line
+                # Split the tail of the line (after narration) into tokens
+                tail = line[first_amt_idx:].strip()
+                tail_amts = AMT_PAT.findall(tail)
+                # Assign based on count
+                deposit    = ""
+                withdrawal = ""
+                if len(tail_amts) == 3:
+                    deposit    = tail_amts[0]
+                    withdrawal = tail_amts[1]
+                    balance    = tail_amts[2]
+                elif len(tail_amts) == 2:
+                    # One of deposit/withdrawal is 0.00 (not printed or merged)
+                    # Check if line contains "Dr" / "CR" hint
+                    line_upper = line.upper()
+                    if "/DR" in line_upper or " DR " in line_upper:
+                        withdrawal = tail_amts[0]
+                        balance    = tail_amts[1]
                     else:
-                        header = [f'COL_{i}' for i in range(n_cols)]
-
-                    for row in tbl[start:]:
-                        cells = [str(c or '').strip() for c in row]
-                        if any(cells):
-                            all_rows.append(cells)
-
+                        deposit    = tail_amts[0]
+                        balance    = tail_amts[1]
                 else:
-                    # Already locked — collect rows from matching tables on later pages
-                    # Skip if column count is wildly different (it's a different table)
-                    tbl_cols = max(len(r) for r in tbl)
-                    if abs(tbl_cols - n_cols) > 2:
-                        continue
+                    balance = tail_amts[-1] if tail_amts else ""
 
-                    # Skip repeated header rows
-                    start = 0
-                    first_row = [str(c or '').strip() for c in tbl[0]]
-                    if not any(DATE_RE.search(c) for c in first_row):
-                        start = 1  # no dates = header row, skip it
+                rows.append({
+                    "DATE":               date,
+                    "TRANSACTION DETAILS": narration,
+                    "DEPOSIT AMT":        deposit,
+                    "WITHDRAWAL AMT":     withdrawal,
+                    "BALANCE AMT":        balance,
+                })
 
-                    for row in tbl[start:]:
-                        cells = [str(c or '').strip() for c in row]
-                        if any(cells):
-                            all_rows.append(cells)
-
-    if not locked or not all_rows:
+    if not rows:
         raise ValueError(
-            'No transaction table found in this PDF. '
-            'Make sure it is a bank statement with a Date/Amount table.'
+            "No transactions found in PDF. "
+            "The PDF may be scanned (image-only) or in an unsupported format."
         )
 
-    # Pad/trim all rows to same column count
-    padded = []
-    for row in all_rows:
-        if len(row) < n_cols:
-            row = row + [''] * (n_cols - len(row))
-        padded.append(row[:n_cols])
-
-    if len(header) < n_cols:
-        header = header + [f'COL_{i}' for i in range(len(header), n_cols)]
-    header = header[:n_cols]
-
-    df = pd.DataFrame(padded, columns=header)
-
-    # Drop fully empty rows
-    df = df.replace('', float('nan'))
-    df = df.dropna(how='all')
-    df = df.fillna('')
-    df = df.reset_index(drop=True)
-
-    # Remove repeated header rows (ICICI prints header on every page)
-    first_col = df.columns[0]
-    df = df[df[first_col].astype(str).str.strip() != str(first_col).strip()]
-    df = df.reset_index(drop=True)
-
-    df = normalize_columns(df)
+    df = pd.DataFrame(rows)
+    # Convert amount columns to numeric
+    for col in ["DEPOSIT AMT", "WITHDRAWAL AMT", "BALANCE AMT"]:
+        df[col] = pd.to_numeric(
+            df[col].str.replace(",", "", regex=False),
+            errors="coerce"
+        ).fillna(0.0)
+    # Parse dates
+    df["DATE"] = pd.to_datetime(df["DATE"], format="%d-%m-%Y", errors="coerce")
+    df = df.dropna(subset=["DATE"])
+    df = df.sort_values("DATE").reset_index(drop=True)
     return df
-
 
 def process_file(uploaded, pdf_password=""):
     if uploaded.name.lower().endswith(".pdf"):
@@ -389,7 +378,6 @@ def process_file(uploaded, pdf_password=""):
         st.stop()
 
         df = extract_df_from_pdf(uploaded, pdf_password)
-        st.info("DEBUG raw PDF cols: " + str(list(df.columns)) + " | rows: " + str(len(df)))  # TEMP DEBUG
         try: df = normalize_columns(df)
         except: pass
     elif uploaded.name.lower().endswith(".csv"):
