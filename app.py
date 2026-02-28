@@ -80,42 +80,91 @@ def categorize(desc):
 
 
 def normalize_columns(df):
-    df.columns = df.columns.str.strip()
+    # Stage 0: strip whitespace from all column names
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Stage 1: exhaustive exact-name rename map
     direct = {
-        "Category": "TRANSACTION DETAILS", "Type": "TRANSACTION DETAILS",
-        "Narration": "TRANSACTION DETAILS", "Description": "TRANSACTION DETAILS",
-        "Particulars": "TRANSACTION DETAILS", "Timestamp": "DATE",
-        "Transaction Date": "DATE", "Txn Date": "DATE", "Trans Date": "DATE",
-        "Debit": "WITHDRAWAL AMT", "Debit Amt": "WITHDRAWAL AMT",
-        "Credit": "DEPOSIT AMT", "Credit Amt": "DEPOSIT AMT",
-        "Balance": "BALANCE AMT", "Closing Balance": "BALANCE AMT",
+        "Date": "DATE", "date": "DATE", "DATE": "DATE",
+        "Dt": "DATE", "DT": "DATE",
+        "Trans Date": "DATE", "Trans. Date": "DATE",
+        "Transaction Date": "DATE", "Txn Date": "DATE", "TXN DATE": "DATE",
+        "Value Date": "DATE", "VALUE DATE": "DATE",
+        "Posting Date": "DATE", "Post Date": "DATE", "Timestamp": "DATE",
+        "Narration": "TRANSACTION DETAILS", "NARRATION": "TRANSACTION DETAILS",
+        "Particulars": "TRANSACTION DETAILS", "PARTICULARS": "TRANSACTION DETAILS",
+        "Description": "TRANSACTION DETAILS", "DESCRIPTION": "TRANSACTION DETAILS",
+        "Remarks": "TRANSACTION DETAILS", "Details": "TRANSACTION DETAILS",
+        "Type": "TRANSACTION DETAILS", "Category": "TRANSACTION DETAILS",
+        "Debit": "WITHDRAWAL AMT", "DEBIT": "WITHDRAWAL AMT",
+        "Debit Amt": "WITHDRAWAL AMT", "Debit Amount": "WITHDRAWAL AMT",
+        "DR": "WITHDRAWAL AMT", "Dr": "WITHDRAWAL AMT",
+        "Withdrawals": "WITHDRAWAL AMT", "WITHDRAWALS": "WITHDRAWAL AMT",
+        "Withdrawal": "WITHDRAWAL AMT", "Amount Debited": "WITHDRAWAL AMT",
+        "Credit": "DEPOSIT AMT", "CREDIT": "DEPOSIT AMT",
+        "Credit Amt": "DEPOSIT AMT", "Credit Amount": "DEPOSIT AMT",
+        "CR": "DEPOSIT AMT", "Cr": "DEPOSIT AMT",
+        "Deposits": "DEPOSIT AMT", "DEPOSITS": "DEPOSIT AMT",
+        "Deposit": "DEPOSIT AMT", "Amount Credited": "DEPOSIT AMT",
+        "Balance": "BALANCE AMT", "BALANCE": "BALANCE AMT",
+        "Closing Balance": "BALANCE AMT", "CLOSING BALANCE": "BALANCE AMT",
+        "Running Balance": "BALANCE AMT", "Bal": "BALANCE AMT", "BAL": "BALANCE AMT",
     }
     for src, tgt in direct.items():
         if src in df.columns and tgt not in df.columns:
             df = df.rename(columns={src: tgt})
-    cols_upper = {c.upper().strip(): c for c in df.columns}
-    date_c   = ["DATE", "TRANSACTION DATE", "TXN DATE", "VALUE DATE", "TIMESTAMP"]
-    detail_c = ["TRANSACTION DETAILS", "NARRATION", "DESCRIPTION", "PARTICULARS", "TYPE", "CATEGORY", "REMARKS"]
-    wd_c     = ["WITHDRAWAL AMT", "DEBIT", "DEBIT AMT", "DR", "WITHDRAWALS", "AMOUNT DEBITED"]
-    dep_c    = ["DEPOSIT AMT", "CREDIT", "CREDIT AMT", "CR", "DEPOSITS", "AMOUNT CREDITED"]
-    bal_c    = ["BALANCE AMT", "BALANCE", "CLOSING BALANCE", "RUNNING BALANCE"]
+
+    # Stage 2: fully lowercase fuzzy match
+    date_c   = ['date', 'transaction date', 'txn date', 'value date',
+                'timestamp', 'posting date', 'trans date', 'dt',
+                'trans. date', 'post date']
+    detail_c = ['transaction details', 'narration', 'description',
+                'particulars', 'type', 'category', 'remarks', 'details']
+    wd_c     = ['withdrawal amt', 'debit', 'debit amt', 'dr', 'withdrawals',
+                'amount debited', 'withdrawal', 'debit amount']
+    dep_c    = ['deposit amt', 'credit', 'credit amt', 'cr', 'deposits',
+                'amount credited', 'deposit', 'credit amount']
+    bal_c    = ['balance amt', 'balance', 'closing balance',
+                'running balance', 'bal', 'closing bal']
+
+    cols_lower = {c.lower().strip(): c for c in df.columns}
 
     def find(cands):
         for c in cands:
-            if c in cols_upper: return cols_upper[c]
+            if c in cols_lower:
+                return cols_lower[c]
         for c in cands:
-            for cu, co in cols_upper.items():
-                if c in cu or cu in c: return co
+            for cl, co in cols_lower.items():
+                if c in cl or cl in c:
+                    return co
         return None
 
     col_map = {}
-    for tgt, cands in [("DATE", date_c), ("TRANSACTION DETAILS", detail_c),
-                       ("WITHDRAWAL AMT", wd_c), ("DEPOSIT AMT", dep_c), ("BALANCE AMT", bal_c)]:
-        f = find(cands)
-        if f and tgt not in df.columns:
-            col_map[f] = tgt
+    for tgt, cands in [
+        ("DATE",                date_c),
+        ("TRANSACTION DETAILS", detail_c),
+        ("WITHDRAWAL AMT",      wd_c),
+        ("DEPOSIT AMT",         dep_c),
+        ("BALANCE AMT",         bal_c),
+    ]:
+        if tgt not in df.columns:
+            f = find(cands)
+            if f:
+                col_map[f] = tgt
     df = df.rename(columns=col_map)
-    missing = [r for r in ["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT"] if r not in df.columns]
+
+    # Stage 3: value-scan fallback — if DATE still missing, find it by cell content
+    if 'DATE' not in df.columns:
+        for col in df.columns:
+            sample = df[col].dropna().astype(str).head(20)
+            hits   = sample.apply(_looks_like_date_value).sum()
+            if hits >= 3:
+                df = df.rename(columns={col: 'DATE'})
+                break
+
+    # Validate
+    missing = [r for r in ["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT"]
+               if r not in df.columns]
     if missing:
         raise ValueError(
             "Cannot find required columns: " + str(missing) +
@@ -123,15 +172,12 @@ def normalize_columns(df):
             "\nPlease rename to: DATE, TRANSACTION DETAILS, WITHDRAWAL AMT, DEPOSIT AMT, BALANCE AMT"
         )
     for col in ["DEPOSIT AMT", "BALANCE AMT"]:
-        if col not in df.columns: df[col] = 0
+        if col not in df.columns:
+            df[col] = 0
     return df
 
 
 
-
-# ══════════════════════════════════════════════════════════════════
-# ROBUST PDF PARSER (Fix 2: handles all real-world bank statement PDFs)
-# ══════════════════════════════════════════════════════════════════
 def _looks_like_date_header(val):
     """Return True if a string looks like a date column header."""
     if not isinstance(val, str):
@@ -262,6 +308,7 @@ def extract_df_from_pdf(pdf_path, password=None):
 def process_file(uploaded, pdf_password=""):
     if uploaded.name.lower().endswith(".pdf"):
         df = extract_df_from_pdf(uploaded, pdf_password)
+        st.info("DEBUG raw PDF cols: " + str(list(df.columns)))  # TEMP DEBUG
         try: df = normalize_columns(df)
         except: pass
     elif uploaded.name.lower().endswith(".csv"):
