@@ -260,20 +260,18 @@ def _score_table(rows):
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Extract transactions from ICICI (and similar) bank statement PDFs.
-    Uses text extraction + regex since pdfplumber extract_tables() only
-    captures the header row (1 row/page) — the data rows are plain text.
+    Extract transactions from ICICI bank statement PDFs using text parsing.
+    pdfplumber extract_tables() only returns the header row (1 row/page).
+    The actual transaction data is plain text — parsed here with regex.
     """
     import pdfplumber
     import pandas as pd
     import re as _re
 
-    # ICICI transaction line:
-    # 01-02-2023  [optional mode like UPI/BIL]  narration text  deposits  withdrawals  balance
-    # Date is always DD-MM-YYYY at the start of a transaction line
-    DATE_PAT  = _re.compile(r'^(\d{2}-\d{2}-\d{4})')
-    # Amount pattern: Indian number format like 1,23,456.78 or 0.00
-    AMT_PAT   = _re.compile(r'[\d,]+\.\d{2}')
+    # Transaction lines start with DD-MM-YYYY
+    DATE_START = _re.compile(r"^(\d{2}-\d{2}-\d{4})")
+    # Indian currency amounts: 1,23,456.78 or 294.00
+    AMT = _re.compile(r"[\d,]+\.\d{2}")
 
     open_kwargs = {"password": password} if password else {}
     rows = []
@@ -283,75 +281,56 @@ def extract_df_from_pdf(pdf_path, password=None):
             text = page.extract_text()
             if not text:
                 continue
-            for line in text.splitlines():
-                line = line.strip()
-                # Every transaction line starts with DD-MM-YYYY
-                if not DATE_PAT.match(line):
-                    continue
-                # Extract all amounts from the line
-                amounts = AMT_PAT.findall(line)
+            for raw_line in text.splitlines():
+                line = raw_line.strip()
+                if not DATE_START.match(line):
+                    continue          # not a transaction line
+                amounts = AMT.findall(line)
                 if len(amounts) < 2:
-                    continue  # need at least withdrawal/deposit + balance
-                # Date is first 10 chars
-                date = line[:10].strip()
-                # Balance is always the last amount
-                balance = amounts[-1]
-                # Second-to-last amount is either deposit or withdrawal
-                # We determine which by checking the line for context
-                second_amt = amounts[-2]
-                # Everything between date and the first amount is the narration
-                first_amt_idx = line.index(amounts[0])
-                narration = line[10:first_amt_idx].strip()
-                # Figure out deposit vs withdrawal
-                # ICICI format: ... DEPOSITS  WITHDRAWALS  BALANCE
-                # So amounts[-3]=deposit, amounts[-2]=withdrawal if 3+ amounts
-                # But many lines have only 2 amounts (one is 0.00 which gets skipped by regex if literally 0.00)
-                # Safer: look at position in line
-                # Split the tail of the line (after narration) into tokens
-                tail = line[first_amt_idx:].strip()
-                tail_amts = AMT_PAT.findall(tail)
-                # Assign based on count
+                    continue          # need at least one amount + balance
+
+                date      = line[:10]
+                balance   = amounts[-1]
+                # Narration = everything between date and first amount
+                first_pos = line.index(amounts[0])
+                narration = line[10:first_pos].strip()
+
+                # Assign deposit / withdrawal based on position
+                # ICICI column order: DEPOSITS  WITHDRAWALS  BALANCE
                 deposit    = ""
                 withdrawal = ""
-                if len(tail_amts) == 3:
-                    deposit    = tail_amts[0]
-                    withdrawal = tail_amts[1]
-                    balance    = tail_amts[2]
-                elif len(tail_amts) == 2:
-                    # One of deposit/withdrawal is 0.00 (not printed or merged)
-                    # Check if line contains "Dr" / "CR" hint
-                    line_upper = line.upper()
-                    if "/DR" in line_upper or " DR " in line_upper:
-                        withdrawal = tail_amts[0]
-                        balance    = tail_amts[1]
+                if len(amounts) >= 3:
+                    deposit    = amounts[-3]
+                    withdrawal = amounts[-2]
+                elif len(amounts) == 2:
+                    # Only one non-balance amount — decide by Dr/Cr hint
+                    if _re.search(r"\bDR\b|/DR", line.upper()):
+                        withdrawal = amounts[0]
                     else:
-                        deposit    = tail_amts[0]
-                        balance    = tail_amts[1]
-                else:
-                    balance = tail_amts[-1] if tail_amts else ""
+                        deposit = amounts[0]
 
                 rows.append({
-                    "DATE":               date,
+                    "DATE":                date,
                     "TRANSACTION DETAILS": narration,
-                    "DEPOSIT AMT":        deposit,
-                    "WITHDRAWAL AMT":     withdrawal,
-                    "BALANCE AMT":        balance,
+                    "DEPOSIT AMT":         deposit,
+                    "WITHDRAWAL AMT":      withdrawal,
+                    "BALANCE AMT":         balance,
                 })
 
     if not rows:
         raise ValueError(
-            "No transactions found in PDF. "
-            "The PDF may be scanned (image-only) or in an unsupported format."
+            "No transactions found in this PDF. "
+            "Ensure it is a text-based bank statement (not a scanned image)."
         )
 
     df = pd.DataFrame(rows)
-    # Convert amount columns to numeric
+
     for col in ["DEPOSIT AMT", "WITHDRAWAL AMT", "BALANCE AMT"]:
         df[col] = pd.to_numeric(
-            df[col].str.replace(",", "", regex=False),
+            df[col].astype(str).str.replace(",", "", regex=False),
             errors="coerce"
         ).fillna(0.0)
-    # Parse dates
+
     df["DATE"] = pd.to_datetime(df["DATE"], format="%d-%m-%Y", errors="coerce")
     df = df.dropna(subset=["DATE"])
     df = df.sort_values("DATE").reset_index(drop=True)
