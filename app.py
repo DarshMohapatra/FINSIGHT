@@ -224,24 +224,60 @@ def _looks_like_date_value(val):
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Parse ICICI bank statement PDF.
-    Line format: DATE  NARRATION  AMOUNT  BALANCE
-    Deposit vs withdrawal determined by balance delta (prev_bal ± amt = new_bal).
-    B/F opening balance lines are excluded from transactions.
+    Universal Indian + international bank statement PDF parser.
+
+    Supported formats:
+      2-column: DATE  NARRATION  AMOUNT  BALANCE          (ICICI, HDFC, Axis, Kotak)
+      3-column: DATE  NARRATION  DEBIT  CREDIT  BALANCE   (SBI, PNB, Canara, BOI)
+
+    Supported date formats:
+      DD-MM-YYYY  DD/MM/YYYY  YYYY-MM-DD  DD-Mon-YYYY  DD Mon YYYY
+      MM/DD/YYYY (US)  YYYY/MM/DD
+
+    Deposit vs withdrawal:
+      3-col → explicit debit/credit columns (one is 0.00 or blank)
+      2-col → balance delta: prev ± amt = new_bal determines direction
     """
     import pdfplumber
     import pandas as pd
     import re as _re
+    from datetime import datetime
 
-    TXN_START = _re.compile(r"^(\d{2}-\d{2}-\d{4})\s+(.*)")
-    AMT_PAT   = _re.compile(r"[\d,]+\.\d{2}")
+    # ── Date patterns (order matters — most specific first) ──────────────────
+    DATE_FORMATS = [
+        # Pattern regex                          strptime format
+        (_re.compile(r"^\d{2}-\d{2}-\d{4}"),   "%d-%m-%Y"),   # DD-MM-YYYY (ICICI)
+        (_re.compile(r"^\d{2}/\d{2}/\d{4}"),   "%d/%m/%Y"),   # DD/MM/YYYY
+        (_re.compile(r"^\d{4}-\d{2}-\d{2}"),   "%Y-%m-%d"),   # YYYY-MM-DD (ISO)
+        (_re.compile(r"^\d{4}/\d{2}/\d{2}"),   "%Y/%m/%d"),   # YYYY/MM/DD
+        (_re.compile(r"^\d{2}-[A-Za-z]{3}-\d{4}"), "%d-%b-%Y"), # DD-Mon-YYYY
+        (_re.compile(r"^\d{2}\s[A-Za-z]{3}\s\d{4}"), "%d %b %Y"), # DD Mon YYYY
+        (_re.compile(r"^\d{2}/\d{2}/\d{2}"),   "%d/%m/%y"),   # DD/MM/YY
+        (_re.compile(r"^\d{2}-\d{2}-\d{2}"),   "%d-%m-%y"),   # DD-MM-YY
+    ]
+
+    AMT_PAT = _re.compile(r"[\d,]+\.\d{2}")
+
+    def parse_date(s):
+        """Try all date formats, return (date_str_matched, fmt) or None."""
+        for pat, fmt in DATE_FORMATS:
+            m = pat.match(s)
+            if m:
+                token = m.group(0)
+                try:
+                    datetime.strptime(token, fmt)
+                    return token, fmt
+                except ValueError:
+                    continue
+        return None
 
     def to_float(s):
         try:
-            return float(str(s).replace(",", ""))
+            return float(str(s).replace(",", "").strip())
         except Exception:
             return None
 
+    # ── Open PDF ─────────────────────────────────────────────────────────────
     open_kwargs = {"password": password} if password else {}
     try:
         pdf_file = pdfplumber.open(pdf_path, **open_kwargs)
@@ -254,9 +290,31 @@ def extract_df_from_pdf(pdf_path, password=None):
             )
         raise
 
-    raw_rows   = []   # (date_str, narration, amt_float, bal_float)
-    prev_bal   = None
+    # ── Detect column format from table header ────────────────────────────────
+    # 3-column banks print explicit DEBIT/CREDIT headers
+    three_col_mode = False
+    with pdf_file:
+        pass  # just to close cleanly before reopening below
 
+    pdf_file = pdfplumber.open(pdf_path, **open_kwargs)
+    with pdf_file as pdf:
+        for page in pdf.pages[:3]:
+            for tbl in (page.extract_tables() or []):
+                if not tbl:
+                    continue
+                header = [str(c or "").strip().upper() for c in tbl[0]]
+                has_debit  = any("DEBIT"  in h or "DR" == h or "WITHDRAWAL" in h for h in header)
+                has_credit = any("CREDIT" in h or "CR" == h or "DEPOSIT"    in h for h in header)
+                if has_debit and has_credit:
+                    three_col_mode = True
+                    break
+            if three_col_mode:
+                break
+
+    # ── Parse text lines ──────────────────────────────────────────────────────
+    raw_rows = []   # (date_str, fmt, narration, amounts_list)
+
+    pdf_file = pdfplumber.open(pdf_path, **open_kwargs)
     with pdf_file as pdf:
         for page in pdf.pages:
             try:
@@ -268,97 +326,131 @@ def extract_df_from_pdf(pdf_path, password=None):
 
             for raw in text.splitlines():
                 line = raw.strip()
-                m = TXN_START.match(line)
-                if not m:
+                if not line:
                     continue
 
-                date_str = m.group(1)
-                rest     = m.group(2).strip()
-                amounts  = AMT_PAT.findall(rest)
-
-                if len(amounts) == 0:
+                result = parse_date(line)
+                if not result:
                     continue
 
-                # B/F line: only 1 amount = opening balance, set prev_bal and skip
+                date_token, date_fmt = result
+                rest    = line[len(date_token):].strip()
+                amounts = AMT_PAT.findall(rest)
+
+                # Skip lines with no amounts (pure date + text, e.g. page headers)
+                if not amounts:
+                    continue
+
+                # Skip B/F / opening balance lines (only 1 amount = the balance itself)
                 if len(amounts) == 1:
-                    prev_bal = to_float(amounts[0])
                     continue
 
-                # Normal line: last amount = new balance, second-to-last = txn amount
-                bal_str = amounts[-1]
-                amt_str = amounts[-2]
-                bal     = to_float(bal_str)
-                amt     = to_float(amt_str)
+                # Narration = text before first amount
+                first_pos = rest.index(amounts[0])
+                narration = rest[:first_pos].strip()
 
-                # Narration = everything before the first amount
-                first_amt_pos = rest.index(amounts[0])
-                narration     = rest[:first_amt_pos].strip()
-
-                # Skip lines with no narration and no meaningful content
-                # (these are continuation lines or page totals)
-                if not narration and len(amounts) == 2:
-                    # Could be a split narration line — still record it
-                    pass
-
-                raw_rows.append((date_str, narration, amt, bal))
-                prev_bal = bal
+                raw_rows.append((date_token, date_fmt, narration, amounts))
 
     if not raw_rows:
         raise ValueError(
-            "No transactions found. "
-            "PDF may be image-only (scanned). Try a CSV/Excel export instead."
+            "No transactions found in this PDF. "
+            "It may be image-only (scanned). Try a CSV/Excel export."
         )
 
-    # Now assign deposit vs withdrawal using balance delta
-    rows = []
+    # ── Assign deposit / withdrawal ───────────────────────────────────────────
+    rows     = []
     prev_bal = None
-    for date_str, narration, amt, bal in raw_rows:
+
+    for date_token, date_fmt, narration, amounts in raw_rows:
         deposit    = 0.0
         withdrawal = 0.0
+        balance    = 0.0
 
-        if prev_bal is not None and amt is not None and bal is not None:
-            # Check which direction the balance moved
-            expected_withdrawal = round(prev_bal - amt, 2)
-            expected_deposit    = round(prev_bal + amt, 2)
-            bal_rounded         = round(bal, 2)
+        if three_col_mode or len(amounts) >= 3:
+            # 3-column format: DEBIT  CREDIT  BALANCE
+            # (some banks put credit before debit — we use balance delta to verify)
+            debit_cand  = to_float(amounts[-3])
+            credit_cand = to_float(amounts[-2])
+            bal_cand    = to_float(amounts[-1])
 
-            tol = 1.0  # 1 rupee tolerance for rounding
-
-            if abs(bal_rounded - expected_withdrawal) <= tol:
-                withdrawal = amt
-            elif abs(bal_rounded - expected_deposit) <= tol:
-                deposit = amt
-            else:
-                # Balance delta unclear — fall back to keyword hint
-                rest_upper = narration.upper()
-                credit_kws = ["REFUND","SALARY","INTEREST","CASHBACK",
-                              "REVERSAL","REWARD","DIVIDEND","B/F","/CR"," CR "]
-                if any(k in rest_upper for k in credit_kws):
-                    deposit = amt
+            if bal_cand is not None and prev_bal is not None:
+                tol = 2.0
+                # Verify which is debit vs credit using balance delta
+                if debit_cand and abs(round(prev_bal - debit_cand, 2) - round(bal_cand, 2)) <= tol:
+                    withdrawal = debit_cand
+                    balance    = bal_cand
+                elif credit_cand and abs(round(prev_bal + credit_cand, 2) - round(bal_cand, 2)) <= tol:
+                    deposit = credit_cand
+                    balance = bal_cand
                 else:
-                    withdrawal = amt
-        else:
-            # No previous balance to compare — use keyword hint
-            rest_upper = narration.upper()
-            credit_kws = ["REFUND","SALARY","INTEREST","CASHBACK",
-                          "REVERSAL","REWARD","DIVIDEND","B/F","/CR"," CR "]
-            if any(k in rest_upper for k in credit_kws):
-                deposit = amt
+                    # Both columns have values (rare) or rounding mismatch
+                    withdrawal = debit_cand  if debit_cand  else 0.0
+                    deposit    = credit_cand if credit_cand else 0.0
+                    balance    = bal_cand
             else:
-                withdrawal = amt
+                withdrawal = debit_cand  if debit_cand  else 0.0
+                deposit    = credit_cand if credit_cand else 0.0
+                balance    = bal_cand if bal_cand else 0.0
 
-        prev_bal = bal
+        else:
+            # 2-column format: AMOUNT  BALANCE
+            amt_val = to_float(amounts[-2])
+            bal_val = to_float(amounts[-1])
+            balance = bal_val if bal_val else 0.0
+
+            if prev_bal is not None and amt_val is not None and bal_val is not None:
+                tol = 2.0
+                exp_withdrawal = round(prev_bal - amt_val, 2)
+                exp_deposit    = round(prev_bal + amt_val, 2)
+                bal_r          = round(bal_val, 2)
+
+                if abs(bal_r - exp_withdrawal) <= tol:
+                    withdrawal = amt_val
+                elif abs(bal_r - exp_deposit) <= tol:
+                    deposit = amt_val
+                else:
+                    # Ambiguous — keyword fallback
+                    n_upper = narration.upper()
+                    credit_kws = ["REFUND", "SALARY", "INTEREST", "CASHBACK",
+                                  "REVERSAL", "REWARD", "DIVIDEND", "/CR", " CR ",
+                                  "NEFT CR", "IMPS CR", "RTGS CR"]
+                    if any(k in n_upper for k in credit_kws):
+                        deposit = amt_val
+                    else:
+                        withdrawal = amt_val
+            else:
+                # No prev_bal yet — keyword fallback
+                n_upper = narration.upper()
+                credit_kws = ["REFUND", "SALARY", "INTEREST", "CASHBACK",
+                              "REVERSAL", "REWARD", "DIVIDEND", "/CR", " CR ",
+                              "NEFT CR", "IMPS CR", "RTGS CR"]
+                if any(k in n_upper for k in credit_kws):
+                    deposit = to_float(amounts[-2]) or 0.0
+                else:
+                    withdrawal = to_float(amounts[-2]) or 0.0
+
+        prev_bal = to_float(amounts[-1])
 
         rows.append({
-            "DATE":                date_str,
+            "DATE":                date_token,
             "TRANSACTION DETAILS": narration,
-            "DEPOSIT AMT":         deposit,
-            "WITHDRAWAL AMT":      withdrawal,
-            "BALANCE AMT":         bal if bal else 0.0,
+            "DEPOSIT AMT":         round(deposit,    2),
+            "WITHDRAWAL AMT":      round(withdrawal, 2),
+            "BALANCE AMT":         round(balance,    2),
         })
 
     df = pd.DataFrame(rows)
-    df["DATE"] = pd.to_datetime(df["DATE"], format="%d-%m-%Y", errors="coerce")
+
+    # Parse dates using the detected format
+    # Try each format until one works
+    for _, fmt in DATE_FORMATS:
+        converted = pd.to_datetime(df["DATE"], format=fmt, errors="coerce")
+        if converted.notna().sum() > len(df) * 0.8:
+            df["DATE"] = converted
+            break
+    else:
+        df["DATE"] = pd.to_datetime(df["DATE"], infer_datetime_format=True, errors="coerce")
+
     df = df.dropna(subset=["DATE"])
     df = df.sort_values("DATE").reset_index(drop=True)
     return df
