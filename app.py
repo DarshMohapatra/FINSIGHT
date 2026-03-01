@@ -223,147 +223,25 @@ def _looks_like_date_value(val):
     return any(re.search(p, val.strip(), re.IGNORECASE) for p in patterns)
 
 def extract_df_from_pdf(pdf_path, password=None):
-    """
-    Parse ICICI bank statement PDF using text extraction + regex.
-    Handles deposit/withdrawal column assignment correctly.
-    """
     import pdfplumber
-    import pandas as pd
     import re as _re
-
-    # Transaction line: starts with DD-MM-YYYY
-    TXN_LINE = _re.compile(r"^(\d{2}-\d{2}-\d{4})\s+(.*)")
-    # Indian currency amount e.g. 1,23,456.78 or 294.00
-    AMT      = _re.compile(r"[\d,]+\.\d{2}")
-
+    AMT = _re.compile(r"[\d,]+\.\d{2}")
     open_kwargs = {"password": password} if password else {}
-
-    try:
-        pdf_obj = pdfplumber.open(pdf_path, **open_kwargs)
-    except Exception as e:
-        err = str(e).lower()
-        if "password" in err or "decrypt" in err or "encrypt" in err or "incorrect" in err:
-            raise ValueError(
-                "❌ Incorrect PDF password. "
-                "Try your PAN number, date of birth (DDMMYYYY), or account number."
-            )
-        raise
-
-    rows = []
-    with pdf_obj as pdf:
-        # Verify password worked — if PDF is encrypted and password wrong,
-        # pages will be empty or pdfplumber raises on first access
-        for page in pdf.pages:
-            try:
-                text = page.extract_text(x_tolerance=2, y_tolerance=2)
-            except Exception as e:
-                err = str(e).lower()
-                if "password" in err or "decrypt" in err:
-                    raise ValueError(
-                        "❌ Incorrect PDF password. "
-                        "Try your PAN number, date of birth (DDMMYYYY), or account number."
-                    )
-                continue
-
-            if not text:
-                continue
-
+    dump = []
+    with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
+        for pg_num, page in enumerate(pdf.pages[1:5], start=2):
+            text = page.extract_text(x_tolerance=2, y_tolerance=2) or ""
+            dump.append(f"=== PAGE {pg_num} ===")
             for raw in text.splitlines():
                 line = raw.strip()
-                m = TXN_LINE.match(line)
-                if not m:
-                    continue
-
-                date = m.group(1)
-                rest = m.group(2).strip()
-
-                amounts = AMT.findall(rest)
-                if not amounts:
-                    continue
-
-                # Remove amounts from rest to get narration
-                narration = AMT.sub("", rest).strip()
-                narration = _re.sub(r"\s{2,}", " ", narration).strip()
-
-                balance    = "0.00"
-                deposit    = "0.00"
-                withdrawal = "0.00"
-
-                if len(amounts) >= 3:
-                    # Three amounts: DEPOSIT  WITHDRAWAL  BALANCE
-                    # ICICI column order confirmed: DEPOSITS | WITHDRAWALS | BALANCE
-                    deposit    = amounts[-3]
-                    withdrawal = amounts[-2]
-                    balance    = amounts[-1]
-
-                elif len(amounts) == 2:
-                    # Only one non-zero transaction amount + balance
-                    # Determine deposit vs withdrawal from context:
-                    #   - B/F (Brought Forward) = opening balance, treat as deposit
-                    #   - Narration contains credit keywords = deposit
-                    #   - Otherwise = withdrawal (most transactions are debits)
-                    txn_amt = amounts[0]
-                    balance = amounts[1]
-
-                    rest_upper = rest.upper()
-
-                    # Credit signals: refund, salary, interest, transfer in, B/F
-                    credit_signals = [
-                        "B/F", "REFUND", "SALARY", "INTEREST", "CREDIT",
-                        "CASHBACK", "REVERSAL", "REWARD", "NEFT CR",
-                        "IMPS CR", "UPI CR", "/CR", " CR ", "DIVIDEND",
-                        "MATURITY", "PROCEEDS"
-                    ]
-                    is_credit = any(sig in rest_upper for sig in credit_signals)
-
-                    # Debit signals
-                    debit_signals = [
-                        "/DR", " DR ", "NEFT DR", "IMPS DR", "UPI DR",
-                        "PAYMENT", "PURCHASE", "POS ", "ATM ", "EMI",
-                        "BILL", "CHARGE", "FEE", "TAX"
-                    ]
-                    is_debit = any(sig in rest_upper for sig in debit_signals)
-
-                    if is_credit and not is_debit:
-                        deposit = txn_amt
-                    elif is_debit and not is_credit:
-                        withdrawal = txn_amt
-                    else:
-                        # No clear signal — look at balance change heuristic
-                        # We default to withdrawal (most common for spending statements)
-                        withdrawal = txn_amt
-
-                elif len(amounts) == 1:
-                    # Just a balance line (e.g. B/F opening balance)
-                    balance = amounts[0]
-                    deposit = amounts[0]  # B/F is the opening deposit
-
-                rows.append({
-                    "DATE":                date,
-                    "TRANSACTION DETAILS": narration,
-                    "DEPOSIT AMT":         deposit,
-                    "WITHDRAWAL AMT":      withdrawal,
-                    "BALANCE AMT":         balance,
-                })
-
-    if not rows:
-        raise ValueError(
-            "No transactions found in PDF. "
-            "The PDF may be image-only (scanned). Try a CSV/Excel export."
-        )
-
-    df = pd.DataFrame(rows)
-
-    for col in ["DEPOSIT AMT", "WITHDRAWAL AMT", "BALANCE AMT"]:
-        df[col] = pd.to_numeric(
-            df[col].astype(str).str.replace(",", "", regex=False),
-            errors="coerce"
-        ).fillna(0.0)
-
-    df["DATE"] = pd.to_datetime(df["DATE"], format="%d-%m-%Y", errors="coerce")
-    df = df.dropna(subset=["DATE"])
-    df = df.sort_values("DATE").reset_index(drop=True)
-    return df
+                if _re.match(r"^\d{2}-\d{2}-\d{4}", line):
+                    amts = AMT.findall(line)
+                    dump.append(f"LINE: {repr(line)}")
+                    dump.append(f"  AMOUNTS: {amts}")
+                    dump.append("")
+                    if len(dump) > 80:
+                        break
+    raise ValueError("\n".join(dump[:80]))
 
 def process_file(uploaded, pdf_password=""):
     # ── Parse file into raw DataFrame ─────────────────────────────
