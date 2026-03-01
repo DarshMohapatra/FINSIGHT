@@ -223,69 +223,85 @@ def _looks_like_date_value(val):
     return any(re.search(p, val.strip(), re.IGNORECASE) for p in patterns)
 
 def extract_df_from_pdf(pdf_path, password=None):
+    """
+    Text-based PDF parser — immune to table detection failures.
+    1. Extract raw text from every page
+    2. Split into lines
+    3. Identify transaction rows by date regex (DD-MM-YYYY or DD/MM/YYYY)
+    4. Parse each transaction line by splitting on 2+ spaces
+    5. Combine all pages into one DataFrame
+    """
     import pdfplumber
-    open_kwargs = {"password": password} if password else {}
+    import re
 
-    header   = None
-    n_cols   = 0
-    all_rows = []
+    DATE_RE = re.compile(
+        r'^(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})'  # date at start of line
+    )
+
+    open_kwargs = {"password": password} if password else {}
+    all_rows   = []
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
-        for page in pdf.pages:
-            tables = page.extract_tables() or []
-            for tbl in tables:
-                if not tbl:
+        for page_num, page in enumerate(pdf.pages):
+            # Extract words with their positions
+            words = page.extract_words(x_tolerance=3, y_tolerance=3)
+            if not words:
+                continue
+
+            # Group words into lines by y-position (3px tolerance)
+            lines_by_y = {}
+            for w in words:
+                y = round(w["top"] / 3) * 3
+                lines_by_y.setdefault(y, []).append(w)
+
+            for y in sorted(lines_by_y):
+                line_words = sorted(lines_by_y[y], key=lambda w: w["x0"])
+                line_text  = " ".join(w["text"] for w in line_words).strip()
+
+                # Only keep lines that start with a date
+                if not DATE_RE.match(line_text):
                     continue
-                for row in tbl:
-                    cells = [str(c or "").strip() for c in row]
 
-                    # First time we see a row with a date header → lock it
-                    if header is None:
-                        if any(_looks_like_date_header(c) for c in cells):
-                            seen, clean = {}, []
-                            for h in cells:
-                                h = h or "COL"
-                                if h in seen:
-                                    seen[h] += 1
-                                    h = f"{h}_{seen[h]}"
-                                else:
-                                    seen[h] = 0
-                                clean.append(h)
-                            header = clean
-                            n_cols = len(header)
-                        continue  # skip rows until header is found
+                # Split line into fields by 2+ spaces (column separator in PDFs)
+                fields = re.split(r"  +", line_text)
+                fields = [f.strip() for f in fields if f.strip()]
 
-                    # Skip blank rows
-                    if not any(c for c in cells):
-                        continue
+                if len(fields) >= 3:
+                    all_rows.append(fields)
 
-                    # Skip repeated header rows
-                    if any(_looks_like_date_header(c) for c in cells):
-                        continue
-
-                    # Pad/trim to header width and collect
-                    while len(cells) < n_cols:
-                        cells.append("")
-                    all_rows.append(cells[:n_cols])
-
-    if not all_rows or header is None:
+    if not all_rows:
         raise ValueError(
-            "No transaction table found in PDF. "
+            "Could not parse transactions from PDF text. "
             "Try uploading a CSV or Excel version."
         )
 
-    df = pd.DataFrame(all_rows, columns=header)
-    df = df.dropna(how="all")
+    # Determine max columns across all rows
+    max_cols = max(len(r) for r in all_rows)
+
+    # Pad shorter rows
+    for row in all_rows:
+        while len(row) < max_cols:
+            row.append("")
+
+    # Your PDF column order: DATE, MODE, PARTICULARS, DEPOSITS, WITHDRAWALS, BALANCE
+    # Assign names based on position count
+    if max_cols >= 6:
+        col_names = ["DATE", "MODE", "TRANSACTION DETAILS", "DEPOSIT AMT", "WITHDRAWAL AMT", "BALANCE AMT"]
+        col_names += [f"COL_{i}" for i in range(6, max_cols)]
+    elif max_cols == 5:
+        col_names = ["DATE", "TRANSACTION DETAILS", "DEPOSIT AMT", "WITHDRAWAL AMT", "BALANCE AMT"]
+    elif max_cols == 4:
+        col_names = ["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "BALANCE AMT"]
+    else:
+        col_names = ["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT"]
+        col_names += [f"COL_{i}" for i in range(3, max_cols)]
+
+    # Trim rows to col_names length
+    trimmed = [row[:len(col_names)] for row in all_rows]
+
+    df = pd.DataFrame(trimmed, columns=col_names)
     df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
     df = df.reset_index(drop=True)
-
-    if not any(_looks_like_date_header(c) for c in df.columns):
-        for col in df.columns:
-            hits = df[col].dropna().astype(str).head(20).apply(_looks_like_date_value).sum()
-            if hits >= 2:
-                df = df.rename(columns={col: "Date"})
-                break
-
     return df
 
 def process_file(uploaded, pdf_password=""):
