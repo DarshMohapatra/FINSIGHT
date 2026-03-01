@@ -1,0 +1,302 @@
+[
+  {
+    "card_id": "HDFC_REGALIA",
+    "rates": {
+      "Food & Dining": 2.66,
+      "Grocery": 1.33,
+      "Shopping": 1.33,
+      "Travel": 2.66,
+      "Fuel": 0.0,
+      "Healthcare": 1.33,
+      "Entertainment": 1.33,
+      "Utility": 0.0,
+      "Other": 1.33
+    },
+    "milestone": {
+      "target_spend": 150000,
+      "benefit": "Complimentary Taj Epicure membership + lounge upgrade",
+      "benefit_value": 5000
+    },
+    "notes": "Points never expire. Reward rate drops on utility/govt spends."
+  },
+  {
+    "card_id": "HDFC_MILLENNIA",
+    "rates": {
+      "Food & Dining": 5.0,
+      "Grocery": 2.5,
+      "Shopping": 5.0,
+      "Travel": 2.5,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 5.0,
+      "Utility": 2.5,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 100000,
+      "benefit": "Guaranteed cashback of \u20b91,000",
+      "benefit_value": 1000
+    },
+    "notes": "Cashback credited as CashPoints. 5% only on app/website of partnered brands."
+  },
+  {
+    "card_id": "HDFC_MONEYBACK_PLUS",
+    "rates": {
+      "Food & Dining": 0.67,
+      "Grocery": 1.33,
+      "Shopping": 1.33,
+      "Travel": 0.67,
+      "Fuel": 0.0,
+      "Healthcare": 0.67,
+      "Entertainment": 0.67,
+      "Utility": 0.67,
+      "Other": 0.33
+    },
+    "milestone": {
+      "target_spend": 50000,
+      "benefit": "500 CashPoints bonus",
+      "benefit_value": 500
+    },
+    "notes": "Good entry card. Upgrade to Millennia once spending increases."
+  },
+  {
+    "card_id": "AXIS_ACE",
+    "rates": {
+      "Food & Dining": 4.0,
+      "Grocery": 2.0,
+      "Shopping": 2.0,
+      "Travel": 4.0,
+      "Fuel": 2.0,
+      "Healthcare": 2.0,
+      "Entertainment": 2.0,
+      "Utility": 5.0,
+      "Other": 2.0
+    },
+    "milestone": {
+      "target_spend": 200000,
+      "benefit": "Annual fee waived next year",
+      "benefit_value": 499
+    },
+    "notes": "Best all-rounder cashback card. No minimum redemption. Cashback auto-credited."
+  },
+  {
+    "card_id": "AXIS_FLIPKART",
+    "rates": {
+      "Food & Dining": 4.0,
+      "Grocery": 1.5,
+      "Shopping": 5.0,
+      "Travel": 4.0,
+      "Fuel": 1.5,
+      "Healthcare": 1.5,
+      "Entertainment": 4.0,
+      "Utility": 1.5,
+      "Other": 1.5
+    },
+    "milestone": {
+      "target_spend": 200000,
+      "benefit": "Annual fee waived",
+      "benefit_value": 500
+    },
+    "notes": "Ideal if you shop heavily on Flipkart. Cashback as Flipkart SuperCoins."
+  },
+  {
+    "card_id": "ICICI_AMAZON_PAY",
+    "rates": {
+      "Food & Dining": 2.0,
+      "Grocery": 5.0,
+      "Shopping": 5.0,
+      "Travel": 2.0,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 2.0,
+      "Utility": 2.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "No milestone needed \u2014 cashback is automatic",
+      "benefit_value": 0
+    },
+    "notes": "Lifetime free. Cashback as Amazon Pay balance \u2014 highly liquid. Best for Amazon shoppers."
+  },
+  {
+    "card_id": "ICICI_CORAL",
+    "rates": {
+      "Food & Dining": 0.75,
+      "Grocery": 0.5,
+      "Shopping": 0.5,
+      "Travel": 0.5,
+      "Fuel": 0.0,
+      "Healthcare": 0.5,
+      "Entertainment": 0.75,
+      "Utility": 0.0,
+      "Other": 0.5
+    },
+    "milestone": {
+      "target_spend": 125000,
+      "benefit": "Annual fee waived",
+      "benefit_value": 500
+    },
+    "notes": "Entry ICICI card. Upgrade to Amazon Pay if you shop online frequently."
+  },
+  {
+    "card_id": "SBI_CASHBACK",
+    "rates": {
+      "Food & Dining": 5.0,
+      "Grocery": 5.0,
+      "Shopping": 5.0,
+      "Travel": 5.0,
+      "Fuel": 1.0,
+      "Healthcare": 5.0,
+      "Entertainment": 5.0,
+      "Utility": 5.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 200000,
+      "benefit": "Annual fee reversed",
+      "benefit_value": 999
+    },
+    "notes": "5% on ALL online \u2014 no partnered merchant restriction. Best SBI card currently."
+  },
+  {
+    "card_id": "SBI_SIMPLY_CLICK",
+    "rates": {
+      "Food & Dining": 2.5,
+      "Grocery": 1.25,
+      "Shopping": 2.5,
+      "Travel": 2.5,
+      "Fuel": 0.25,
+      "Healthcare": 1.25,
+      "Entertainment": 2.5,
+      "Utility": 1.25,
+      "Other": 0.25
+    },
+    "milestone": {
+      "target_spend": 100000,
+      "benefit": "Cleartrip e-voucher \u20b92,000",
+      "benefit_value": 2000
+    },
+    "notes": "Great entry card for online shoppers. Upgrade to SBI Cashback for flat 5%."
+  },
+  {
+    "card_id": "KOTAK_811",
+    "rates": {
+      "Food & Dining": 2.0,
+      "Grocery": 2.0,
+      "Shopping": 2.0,
+      "Travel": 2.0,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 2.0,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "Lifetime free \u2014 no milestone needed",
+      "benefit_value": 0
+    },
+    "notes": "Best lifetime free card with decent flat rate. Good backup card."
+  },
+  {
+    "card_id": "IDFC_WOW",
+    "rates": {
+      "Food & Dining": 1.0,
+      "Grocery": 1.0,
+      "Shopping": 1.0,
+      "Travel": 1.0,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 1.0,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "No milestone \u2014 lifetime free",
+      "benefit_value": 0
+    },
+    "notes": "No forex markup \u2014 best card for international transactions."
+  },
+  {
+    "card_id": "IDFC_SELECT",
+    "rates": {
+      "Food & Dining": 2.5,
+      "Grocery": 0.75,
+      "Shopping": 0.75,
+      "Travel": 0.75,
+      "Fuel": 0.0,
+      "Healthcare": 0.75,
+      "Entertainment": 2.5,
+      "Utility": 0.0,
+      "Other": 0.75
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "Lifetime free \u2014 lounge access included",
+      "benefit_value": 0
+    },
+    "notes": "Use on weekends for dining/movies. Switch to ACE for weekday spends."
+  },
+  {
+    "card_id": "YES_MARQUEE",
+    "rates": {
+      "Food & Dining": 3.0,
+      "Grocery": 3.0,
+      "Shopping": 1.5,
+      "Travel": 6.0,
+      "Fuel": 1.5,
+      "Healthcare": 1.5,
+      "Entertainment": 1.5,
+      "Utility": 1.5,
+      "Other": 1.5
+    },
+    "milestone": {
+      "target_spend": 300000,
+      "benefit": "Complimentary night at ITC Hotels",
+      "benefit_value": 8000
+    },
+    "notes": "High annual fee but best travel rewards card in mid-tier segment."
+  },
+  {
+    "card_id": "RBL_SHOPRITE",
+    "rates": {
+      "Food & Dining": 2.0,
+      "Grocery": 5.0,
+      "Shopping": 1.0,
+      "Travel": 1.0,
+      "Fuel": 0.0,
+      "Healthcare": 1.0,
+      "Entertainment": 1.0,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "Lifetime free card",
+      "benefit_value": 0
+    },
+    "notes": "Niche card but unbeatable for grocery. Stack with ACE for other categories."
+  },
+  {
+    "card_id": "AMEX_MRCC",
+    "rates": {
+      "Food & Dining": 1.25,
+      "Grocery": 0.25,
+      "Shopping": 0.25,
+      "Travel": 0.25,
+      "Fuel": 0.0,
+      "Healthcare": 0.25,
+      "Entertainment": 1.25,
+      "Utility": 0.0,
+      "Other": 0.25
+    },
+    "milestone": {
+      "target_spend": 150000,
+      "benefit": "18,000 bonus MR Points (~\u20b94,500 in travel)",
+      "benefit_value": 4500
+    },
+    "notes": "Conservative rates shown. Points worth up to 4x more via airline transfers."
+  }
+]
