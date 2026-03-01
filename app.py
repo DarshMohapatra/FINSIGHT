@@ -328,50 +328,57 @@ def extract_df_from_pdf(pdf_path, password=None):
     return df
 
 def process_file(uploaded, pdf_password=""):
+    # ── Parse file into raw DataFrame ─────────────────────────────
     if uploaded.name.lower().endswith(".pdf"):
-
-
         df = extract_df_from_pdf(uploaded, pdf_password)
-        df = normalize_columns(df)
+        try:
+            df = normalize_columns(df)
+        except Exception:
+            pass
     elif uploaded.name.lower().endswith(".csv"):
         df = pd.read_csv(uploaded)
         df = normalize_columns(df)
     else:
         df = pd.read_excel(uploaded)
         df = normalize_columns(df)
+
+    # ── Parse dates ───────────────────────────────────────────────
     df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
 
-    # Strip commas and currency symbols before numeric conversion
-    # e.g. "1,199.00" → "1199.00", "Rs.294" → "294"
-    def clean_amount(series):
-        return (series.astype(str)
-                      .str.replace(r"[,₹$£€Rs.\s]", "", regex=True)
-                      .str.strip())
+    # ── Clean and convert amounts ─────────────────────────────────
+    # Bank PDFs use "1,199.00" — commas must be stripped or
+    # pd.to_numeric returns NaN, everything becomes 0, pipeline crashes
+    for col in ["WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"]:
+        df[col] = (df[col].astype(str)
+                          .str.replace(",", "", regex=False)
+                          .str.replace("Rs.", "", regex=False)
+                          .str.replace("Rs", "", regex=False)
+                          .str.strip())
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    def _clean_amt(s):
-        return (pd.Series(s).astype(str)
-                  .str.replace(",", "", regex=False)
-                  .str.replace("Rs.", "", regex=False)
-                  .str.replace("Rs", "", regex=False)
-                  .str.strip())
-    df["WITHDRAWAL AMT"] = pd.to_numeric(_clean_amt(df["WITHDRAWAL AMT"]), errors="coerce").fillna(0)
-    df["DEPOSIT AMT"]    = pd.to_numeric(_clean_amt(df["DEPOSIT AMT"]),    errors="coerce").fillna(0)
-    df["BALANCE AMT"]    = pd.to_numeric(_clean_amt(df["BALANCE AMT"]),    errors="coerce").fillna(0)
-
-
+    # ── Filter: keep only rows with actual transactions ───────────
     df = df[(df["WITHDRAWAL AMT"] > 0) | (df["DEPOSIT AMT"] > 0)].copy()
     df.dropna(subset=["DATE"], inplace=True)
+
+    if len(df) == 0:
+        raise ValueError(
+            "No transactions found after filtering. "
+            "Check that your WITHDRAWAL AMT and DEPOSIT AMT columns have numeric values."
+        )
+
+    # ── NLP Categorization ────────────────────────────────────────
     df["CATEGORY"] = df["TRANSACTION DETAILS"].apply(categorize)
+
+    # ── Anomaly Detection ─────────────────────────────────────────
     feats = df[["WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"]].copy()
     sc = StandardScaler()
     fs = sc.fit_transform(feats)
-    m = IsolationForest(n_estimators=100, contamination=0.02, random_state=42)
+    m  = IsolationForest(n_estimators=100, contamination=0.02, random_state=42)
     m.fit(fs)
     df["IS_ANOMALY"] = m.predict(fs)
     df["IS_ANOMALY"] = df["IS_ANOMALY"].map({1: 0, -1: 1})
     df["MONTH"] = df["DATE"].dt.to_period("M")
     return df
-
 
 def dark_fig(rows, cols, size):
     fig, axes = plt.subplots(rows, cols, figsize=size)
