@@ -223,45 +223,90 @@ def _looks_like_date_value(val):
     return any(re.search(p, val.strip(), re.IGNORECASE) for p in patterns)
 
 def extract_df_from_pdf(pdf_path, password=None):
+    """
+    Parse ICICI bank statement PDF using text extraction.
+    extract_tables() only captures 5 summary rows across 42 pages.
+    The actual transaction rows are plain text parsed here by regex.
+    """
     import pdfplumber
-    open_kwargs = {"password": password} if password else {}
+    import pandas as pd
+    import re as _re
 
-    # DIAGNOSTIC: collect per-page info then raise so we can see it
-    page_info = []
-    all_rows  = []
-    header    = None
-    n_cols    = 0
+    # DD-MM-YYYY at the very start of a line = transaction row
+    TXN_LINE  = _re.compile(r"^(\d{2}-\d{2}-\d{4})\s+(.*)")
+    # Indian amount: digits+commas + decimal (e.g. 1,23,456.78 or 294.00)
+    AMT       = _re.compile(r"[\d,]+\.\d{2}")
+
+    open_kwargs = {"password": password} if password else {}
+    rows = []
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
-        total_pages = len(pdf.pages)
-        for page_num, page in enumerate(pdf.pages):
-            tables = page.extract_tables() or []
-            page_rows = 0
-            for tbl in tables:
-                if tbl:
-                    page_rows += len(tbl)
-                    for row in tbl:
-                        cells = [str(c or "").strip() for c in row]
-                        if not any(cells):
-                            continue
-                        if header is None:
-                            if any(_looks_like_date_header(c) for c in cells):
-                                header = cells
-                                n_cols = len(cells)
-                            continue
-                        if any(_looks_like_date_header(c) for c in cells):
-                            continue
-                        while len(cells) < n_cols:
-                            cells.append("")
-                        all_rows.append(cells[:n_cols])
-            page_info.append(f"p{page_num+1}:{page_rows}rows/{len(tables)}tbls")
+        for page in pdf.pages:
+            text = page.extract_text(x_tolerance=2, y_tolerance=2)
+            if not text:
+                continue
 
-    # Build summary
-    summary = f"TOTAL_PAGES={total_pages} | HEADER={header} | DATA_ROWS={len(all_rows)}"
-    summary += " | PER_PAGE=" + " ".join(page_info[:10])  # first 10 pages
-    if all_rows:
-        summary += " | FIRST_ROW=" + str(all_rows[0])
-    raise ValueError(summary)
+            for raw in text.splitlines():
+                line = raw.strip()
+                m = TXN_LINE.match(line)
+                if not m:
+                    continue
+
+                date    = m.group(1)          # DD-MM-YYYY
+                rest    = m.group(2).strip()  # everything after the date
+
+                amounts = AMT.findall(rest)
+                if len(amounts) < 1:
+                    continue
+
+                # Strip all amounts from rest to get narration
+                narration = AMT.sub("", rest).strip()
+                # Also strip trailing/leading UPI mode tokens
+                narration = _re.sub(r"\s{2,}", " ", narration).strip()
+
+                balance    = amounts[-1] if amounts else "0.00"
+                deposit    = ""
+                withdrawal = ""
+
+                if len(amounts) >= 3:
+                    # Both deposit and withdrawal present
+                    deposit    = amounts[-3]
+                    withdrawal = amounts[-2]
+                elif len(amounts) == 2:
+                    # One of them is zero (not printed) — use Dr/Cr hint
+                    if _re.search(r"\bDR\b|/DR\b", rest.upper()):
+                        withdrawal = amounts[0]
+                    else:
+                        deposit    = amounts[0]
+                elif len(amounts) == 1:
+                    balance = amounts[0]
+
+                rows.append({
+                    "DATE":                date,
+                    "TRANSACTION DETAILS": narration,
+                    "DEPOSIT AMT":         deposit    if deposit    else "0.00",
+                    "WITHDRAWAL AMT":      withdrawal if withdrawal else "0.00",
+                    "BALANCE AMT":         balance,
+                })
+
+    if not rows:
+        raise ValueError(
+            "No transactions found. "
+            "The PDF may be image-only (scanned). Try a CSV/Excel export."
+        )
+
+    df = pd.DataFrame(rows)
+
+    for col in ["DEPOSIT AMT", "WITHDRAWAL AMT", "BALANCE AMT"]:
+        df[col] = pd.to_numeric(
+            df[col].astype(str).str.replace(",", "", regex=False),
+            errors="coerce"
+        ).fillna(0.0)
+
+    df["DATE"] = pd.to_datetime(df["DATE"], format="%d-%m-%Y", errors="coerce")
+    df = df.dropna(subset=["DATE"])
+    df = df.sort_values("DATE").reset_index(drop=True)
+    return df
 
 def process_file(uploaded, pdf_password=""):
     # ── Parse file into raw DataFrame ─────────────────────────────
