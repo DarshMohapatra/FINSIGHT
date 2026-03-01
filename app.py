@@ -223,83 +223,61 @@ def _looks_like_date_value(val):
     return any(re.search(p, val.strip(), re.IGNORECASE) for p in patterns)
 
 def extract_df_from_pdf(pdf_path, password=None):
-    """
-    Text-based PDF parser — immune to table detection failures.
-    1. Extract raw text from every page
-    2. Split into lines
-    3. Identify transaction rows by date regex (DD-MM-YYYY or DD/MM/YYYY)
-    4. Parse each transaction line by splitting on 2+ spaces
-    5. Combine all pages into one DataFrame
-    """
     import pdfplumber
-    import re
-
-    DATE_RE = re.compile(
-        r'^(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})'  # date at start of line
-    )
 
     open_kwargs = {"password": password} if password else {}
-    all_rows   = []
+    all_rows = []
+    header   = None
+    n_cols   = 0
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
-        for page_num, page in enumerate(pdf.pages):
-            # Extract words with their positions
-            words = page.extract_words(x_tolerance=3, y_tolerance=3)
-            if not words:
-                continue
-
-            # Group words into lines by y-position (3px tolerance)
-            lines_by_y = {}
-            for w in words:
-                y = round(w["top"] / 3) * 3
-                lines_by_y.setdefault(y, []).append(w)
-
-            for y in sorted(lines_by_y):
-                line_words = sorted(lines_by_y[y], key=lambda w: w["x0"])
-                line_text  = " ".join(w["text"] for w in line_words).strip()
-
-                # Only keep lines that start with a date
-                if not DATE_RE.match(line_text):
+        for page in pdf.pages:
+            # Default extract_tables — this is what originally found 1024 rows
+            for tbl in (page.extract_tables() or []):
+                if not tbl:
                     continue
+                for row in tbl:
+                    cells = [str(c or "").strip() for c in row]
+                    if not any(cells):
+                        continue
+                    # Lock header on first row containing a date keyword
+                    if header is None:
+                        if any(_looks_like_date_header(c) for c in cells):
+                            header = cells
+                            n_cols = len(cells)
+                        continue
+                    # Skip repeated header rows
+                    if any(_looks_like_date_header(c) for c in cells):
+                        continue
+                    # Pad/trim and collect
+                    while len(cells) < n_cols:
+                        cells.append("")
+                    all_rows.append(cells[:n_cols])
 
-                # Split line into fields by 2+ spaces (column separator in PDFs)
-                fields = re.split(r"  +", line_text)
-                fields = [f.strip() for f in fields if f.strip()]
+    if not all_rows or header is None:
+        raise ValueError("No transactions found in PDF. Try CSV/Excel.")
 
-                if len(fields) >= 3:
-                    all_rows.append(fields)
+    # Build DataFrame with RAW column names from PDF
+    df = pd.DataFrame(all_rows, columns=header)
 
-    if not all_rows:
-        raise ValueError(
-            "Could not parse transactions from PDF text. "
-            "Try uploading a CSV or Excel version."
-        )
+    # Inline rename — map PDF column names to app column names
+    # Your PDF has: DATE, MODE**, PARTICULARS, DEPOSITS, WITHDRAWALS, BALANCE
+    rename = {}
+    for col in df.columns:
+        cu = col.upper().strip()
+        if "DEPOSIT" in cu and "WITHDRAWAL" not in cu:
+            rename[col] = "DEPOSIT AMT"
+        elif "WITHDRAWAL" in cu or "WITHDRAW" in cu:
+            rename[col] = "WITHDRAWAL AMT"
+        elif "BALANCE" in cu:
+            rename[col] = "BALANCE AMT"
+        elif "PARTICULAR" in cu or "NARRATION" in cu or "DESCRIPTION" in cu or "DETAIL" in cu or "REMARK" in cu:
+            rename[col] = "TRANSACTION DETAILS"
+        elif _looks_like_date_header(col):
+            rename[col] = "DATE"
+    df = df.rename(columns=rename)
 
-    # Determine max columns across all rows
-    max_cols = max(len(r) for r in all_rows)
-
-    # Pad shorter rows
-    for row in all_rows:
-        while len(row) < max_cols:
-            row.append("")
-
-    # Your PDF column order: DATE, MODE, PARTICULARS, DEPOSITS, WITHDRAWALS, BALANCE
-    # Assign names based on position count
-    if max_cols >= 6:
-        col_names = ["DATE", "MODE", "TRANSACTION DETAILS", "DEPOSIT AMT", "WITHDRAWAL AMT", "BALANCE AMT"]
-        col_names += [f"COL_{i}" for i in range(6, max_cols)]
-    elif max_cols == 5:
-        col_names = ["DATE", "TRANSACTION DETAILS", "DEPOSIT AMT", "WITHDRAWAL AMT", "BALANCE AMT"]
-    elif max_cols == 4:
-        col_names = ["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "BALANCE AMT"]
-    else:
-        col_names = ["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT"]
-        col_names += [f"COL_{i}" for i in range(3, max_cols)]
-
-    # Trim rows to col_names length
-    trimmed = [row[:len(col_names)] for row in all_rows]
-
-    df = pd.DataFrame(trimmed, columns=col_names)
+    df = df.dropna(how="all")
     df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
     df = df.reset_index(drop=True)
     return df
