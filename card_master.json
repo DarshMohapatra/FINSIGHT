@@ -1,0 +1,232 @@
+[
+  {
+    "card_id": "HDFC_REGALIA",
+    "bank": "HDFC Bank",
+    "card_name": "Regalia",
+    "annual_fee": 2500,
+    "joining_fee": 2500,
+    "network": "Visa",
+    "reward_type": "points",
+    "best_for": [
+      "Travel",
+      "Dining"
+    ],
+    "lounge_access": true,
+    "apply_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/regalia-credit-card"
+  },
+  {
+    "card_id": "HDFC_MILLENNIA",
+    "bank": "HDFC Bank",
+    "card_name": "Millennia",
+    "annual_fee": 1000,
+    "joining_fee": 1000,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": [
+      "Shopping",
+      "Food & Dining",
+      "Grocery"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/millennia-credit-card"
+  },
+  {
+    "card_id": "HDFC_MONEYBACK_PLUS",
+    "bank": "HDFC Bank",
+    "card_name": "MoneyBack+",
+    "annual_fee": 500,
+    "joining_fee": 500,
+    "network": "Mastercard",
+    "reward_type": "cashback",
+    "best_for": [
+      "Shopping",
+      "Grocery"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/moneyback-plus-credit-card"
+  },
+  {
+    "card_id": "AXIS_ACE",
+    "bank": "Axis Bank",
+    "card_name": "ACE",
+    "annual_fee": 499,
+    "joining_fee": 499,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": [
+      "Utility",
+      "Food & Dining",
+      "Travel"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.axisbank.com/retail/cards/credit-card/ace-credit-card"
+  },
+  {
+    "card_id": "AXIS_FLIPKART",
+    "bank": "Axis Bank",
+    "card_name": "Flipkart",
+    "annual_fee": 500,
+    "joining_fee": 500,
+    "network": "Mastercard",
+    "reward_type": "cashback",
+    "best_for": [
+      "Shopping",
+      "Food & Dining"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.axisbank.com/retail/cards/credit-card/flipkart-axis-bank-credit-card"
+  },
+  {
+    "card_id": "ICICI_AMAZON_PAY",
+    "bank": "ICICI Bank",
+    "card_name": "Amazon Pay",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": [
+      "Shopping",
+      "Utility",
+      "Food & Dining"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.icicibank.com/personal-banking/cards/consumer-cards/credit-card/amazon-pay-credit-card"
+  },
+  {
+    "card_id": "ICICI_CORAL",
+    "bank": "ICICI Bank",
+    "card_name": "Coral",
+    "annual_fee": 500,
+    "joining_fee": 500,
+    "network": "Visa",
+    "reward_type": "points",
+    "best_for": [
+      "Dining",
+      "Entertainment"
+    ],
+    "lounge_access": true,
+    "apply_url": "https://www.icicibank.com/personal-banking/cards/consumer-cards/credit-card/coral-credit-card"
+  },
+  {
+    "card_id": "SBI_CASHBACK",
+    "bank": "SBI Card",
+    "card_name": "Cashback",
+    "annual_fee": 999,
+    "joining_fee": 999,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": [
+      "Shopping",
+      "Utility"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.sbicard.com/en/personal/credit-cards/rewards/sbi-card-cashback.page"
+  },
+  {
+    "card_id": "SBI_SIMPLY_CLICK",
+    "bank": "SBI Card",
+    "card_name": "SimplyCLICK",
+    "annual_fee": 499,
+    "joining_fee": 499,
+    "network": "Visa",
+    "reward_type": "points",
+    "best_for": [
+      "Shopping",
+      "Entertainment",
+      "Food & Dining"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.sbicard.com/en/personal/credit-cards/rewards/simplyclick-sbi-card.page"
+  },
+  {
+    "card_id": "KOTAK_811",
+    "bank": "Kotak Mahindra Bank",
+    "card_name": "811 #DreamDifferent",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": [
+      "Shopping",
+      "Entertainment"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.kotak.com/en/personal-banking/cards/credit-cards/811-dream-different-credit-card.html"
+  },
+  {
+    "card_id": "IDFC_WOW",
+    "bank": "IDFC FIRST Bank",
+    "card_name": "FIRST Wow",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "points",
+    "best_for": [
+      "Dining",
+      "Shopping"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.idfcfirstbank.com/credit-card/wow"
+  },
+  {
+    "card_id": "IDFC_SELECT",
+    "bank": "IDFC FIRST Bank",
+    "card_name": "FIRST Select",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "points",
+    "best_for": [
+      "Dining",
+      "Entertainment",
+      "Shopping"
+    ],
+    "lounge_access": true,
+    "apply_url": "https://www.idfcfirstbank.com/credit-card/first-select"
+  },
+  {
+    "card_id": "YES_MARQUEE",
+    "bank": "Yes Bank",
+    "card_name": "Marquee",
+    "annual_fee": 9999,
+    "joining_fee": 9999,
+    "network": "Mastercard",
+    "reward_type": "points",
+    "best_for": [
+      "Travel",
+      "Dining",
+      "Grocery"
+    ],
+    "lounge_access": true,
+    "apply_url": "https://www.yesbank.in/personal-banking/yes-individual/accounts-deposits-and-cards/credit-cards/marquee-credit-card"
+  },
+  {
+    "card_id": "RBL_SHOPRITE",
+    "bank": "RBL Bank",
+    "card_name": "Shoprite",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Mastercard",
+    "reward_type": "cashback",
+    "best_for": [
+      "Grocery"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://rblbank.com/cards/shoprite-credit-card"
+  },
+  {
+    "card_id": "AMEX_MRCC",
+    "bank": "American Express",
+    "card_name": "Membership Rewards Credit Card",
+    "annual_fee": 1500,
+    "joining_fee": 0,
+    "network": "Amex",
+    "reward_type": "points",
+    "best_for": [
+      "Dining",
+      "Entertainment"
+    ],
+    "lounge_access": false,
+    "apply_url": "https://www.americanexpress.com/in/credit-cards/mrcc/"
+  }
+]
