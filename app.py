@@ -224,63 +224,44 @@ def _looks_like_date_value(val):
 
 def extract_df_from_pdf(pdf_path, password=None):
     import pdfplumber
-
     open_kwargs = {"password": password} if password else {}
-    all_rows = []
-    header   = None
-    n_cols   = 0
+
+    # DIAGNOSTIC: collect per-page info then raise so we can see it
+    page_info = []
+    all_rows  = []
+    header    = None
+    n_cols    = 0
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
-        for page in pdf.pages:
-            # Default extract_tables — this is what originally found 1024 rows
-            for tbl in (page.extract_tables() or []):
-                if not tbl:
-                    continue
-                for row in tbl:
-                    cells = [str(c or "").strip() for c in row]
-                    if not any(cells):
-                        continue
-                    # Lock header on first row containing a date keyword
-                    if header is None:
+        total_pages = len(pdf.pages)
+        for page_num, page in enumerate(pdf.pages):
+            tables = page.extract_tables() or []
+            page_rows = 0
+            for tbl in tables:
+                if tbl:
+                    page_rows += len(tbl)
+                    for row in tbl:
+                        cells = [str(c or "").strip() for c in row]
+                        if not any(cells):
+                            continue
+                        if header is None:
+                            if any(_looks_like_date_header(c) for c in cells):
+                                header = cells
+                                n_cols = len(cells)
+                            continue
                         if any(_looks_like_date_header(c) for c in cells):
-                            header = cells
-                            n_cols = len(cells)
-                        continue
-                    # Skip repeated header rows
-                    if any(_looks_like_date_header(c) for c in cells):
-                        continue
-                    # Pad/trim and collect
-                    while len(cells) < n_cols:
-                        cells.append("")
-                    all_rows.append(cells[:n_cols])
+                            continue
+                        while len(cells) < n_cols:
+                            cells.append("")
+                        all_rows.append(cells[:n_cols])
+            page_info.append(f"p{page_num+1}:{page_rows}rows/{len(tables)}tbls")
 
-    if not all_rows or header is None:
-        raise ValueError("No transactions found in PDF. Try CSV/Excel.")
-
-    # Build DataFrame with RAW column names from PDF
-    df = pd.DataFrame(all_rows, columns=header)
-
-    # Inline rename — map PDF column names to app column names
-    # Your PDF has: DATE, MODE**, PARTICULARS, DEPOSITS, WITHDRAWALS, BALANCE
-    rename = {}
-    for col in df.columns:
-        cu = col.upper().strip()
-        if "DEPOSIT" in cu and "WITHDRAWAL" not in cu:
-            rename[col] = "DEPOSIT AMT"
-        elif "WITHDRAWAL" in cu or "WITHDRAW" in cu:
-            rename[col] = "WITHDRAWAL AMT"
-        elif "BALANCE" in cu:
-            rename[col] = "BALANCE AMT"
-        elif "PARTICULAR" in cu or "NARRATION" in cu or "DESCRIPTION" in cu or "DETAIL" in cu or "REMARK" in cu:
-            rename[col] = "TRANSACTION DETAILS"
-        elif _looks_like_date_header(col):
-            rename[col] = "DATE"
-    df = df.rename(columns=rename)
-
-    df = df.dropna(how="all")
-    df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
-    df = df.reset_index(drop=True)
-    return df
+    # Build summary
+    summary = f"TOTAL_PAGES={total_pages} | HEADER={header} | DATA_ROWS={len(all_rows)}"
+    summary += " | PER_PAGE=" + " ".join(page_info[:10])  # first 10 pages
+    if all_rows:
+        summary += " | FIRST_ROW=" + str(all_rows[0])
+    raise ValueError(summary)
 
 def process_file(uploaded, pdf_password=""):
     # ── Parse file into raw DataFrame ─────────────────────────────
