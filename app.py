@@ -224,103 +224,103 @@ def _looks_like_date_value(val):
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Simple, robust multi-page PDF extractor.
-    Uses default extract_tables() which reliably finds all rows.
-    Key fix: accepts tables WITHOUT a header row (most pages don't
-    reprint the header) as long as column count matches.
+    Dead-simple multi-page extractor.
+    - Iterates every page, every table, no strategy complexity
+    - Locks column names from first table that has a date header
+    - Accepts ALL subsequent rows regardless of whether page has header
+    - Pads/trims rows to match locked column count
     """
     import pdfplumber
 
     open_kwargs = {"password": password} if password else {}
-
-    header     = None   # column names, locked from first header found
-    n_cols     = 0      # expected column count
-    header_set = None   # lowercase set for dedup detection
+    header     = None
+    n_cols     = 0
+    header_set = set()
     all_rows   = []
 
     with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
         for page_num, page in enumerate(pdf.pages):
-            tables = page.extract_tables() or []
 
-            for tbl in tables:
-                if not tbl:
+            # Try default extraction first, then text strategy as fallback
+            for settings in [None, {"vertical_strategy": "text", "horizontal_strategy": "text"}]:
+                try:
+                    tables = page.extract_tables(settings) if settings else page.extract_tables()
+                except Exception:
                     continue
 
-                # ── Try to find a header row in this table ────────
-                header_idx = None
-                for i, row in enumerate(tbl[:8]):
-                    row_str = [str(c or "").strip() for c in row]
-                    if any(_looks_like_date_header(c) for c in row_str):
-                        header_idx = i
-                        break
+                if not tables:
+                    continue
 
-                # ── Lock header on first encounter ────────────────
-                if header_idx is not None and header is None:
-                    raw_h = [str(c or "").strip() for c in tbl[header_idx]]
-                    seen, clean = {}, []
-                    for h in raw_h:
-                        h = h or "COL"
-                        if h in seen:
-                            seen[h] += 1
-                            h = f"{h}_{seen[h]}"
-                        else:
-                            seen[h] = 0
-                        clean.append(h)
-                    header     = clean
-                    n_cols     = len(header)
-                    header_set = set(v.lower() for v in raw_h if v.strip())
-                    data_start = header_idx + 1
-                    print(f"  Page {page_num+1}: header locked — {n_cols} cols: {header}")
-                elif header_idx is not None:
-                    # Header repeated on this page — skip it
-                    data_start = header_idx + 1
-                else:
-                    # No header on this page — take all rows (if col count matches)
-                    data_start = 0
-
-                if header is None:
-                    continue   # haven't found header yet
-
-                # ── Collect data rows ──────────────────────────────
-                for row in tbl[data_start:]:
-                    cells = [str(c or "").strip() for c in row]
-
-                    # Skip blank rows
-                    if not any(c for c in cells):
+                for tbl in tables:
+                    if not tbl or len(tbl) < 1:
                         continue
 
-                    # Skip rows that look like a repeated header
-                    if header_set:
+                    # Find header row
+                    header_idx = None
+                    for i, row in enumerate(tbl[:8]):
+                        row_str = [str(c or "").strip() for c in row]
+                        if any(_looks_like_date_header(c) for c in row_str):
+                            header_idx = i
+                            break
+
+                    # Lock header on first encounter
+                    if header_idx is not None and header is None:
+                        raw_h = [str(c or "").strip() for c in tbl[header_idx]]
+                        seen, clean = {}, []
+                        for h in raw_h:
+                            h = h or "COL"
+                            if h in seen:
+                                seen[h] += 1
+                                h = f"{h}_{seen[h]}"
+                            else:
+                                seen[h] = 0
+                            clean.append(h)
+                        header     = clean
+                        n_cols     = len(header)
+                        header_set = set(v.lower() for v in raw_h if v.strip())
+
+                    if header is None:
+                        continue
+
+                    # Collect data rows
+                    data_start = (header_idx + 1) if header_idx is not None else 0
+                    for row in tbl[data_start:]:
+                        cells = [str(c or "").strip() for c in row]
+
+                        # Skip blank rows
+                        if not any(c for c in cells):
+                            continue
+
+                        # Skip repeated header rows
                         row_lower = set(c.lower() for c in cells if c)
                         if len(row_lower & header_set) >= max(2, n_cols // 2):
                             continue
 
-                    # Pad or trim to match header width
-                    while len(cells) < n_cols:
-                        cells.append("")
-                    cells = cells[:n_cols]
+                        # Pad/trim to header width
+                        while len(cells) < n_cols:
+                            cells.append("")
+                        cells = cells[:n_cols]
+                        all_rows.append(cells)
 
-                    all_rows.append(cells)
+                # If we got rows with the default strategy, don't try fallback
+                if all_rows:
+                    break
 
     if not all_rows or header is None:
         raise ValueError(
             "No transaction table found in PDF. "
-            "Try uploading a CSV or Excel version instead."
+            "Try uploading a CSV or Excel version."
         )
-
-    print(f"  Total rows extracted: {len(all_rows)}")
 
     df = pd.DataFrame(all_rows, columns=header)
     df = df.dropna(how="all")
     df = df[df.apply(lambda r: r.astype(str).str.strip().ne("").any(), axis=1)]
     df = df.reset_index(drop=True)
 
-    # Regex fallback: detect date column by value if header name didn't match
+    # Regex fallback for date column detection
     if not any(_looks_like_date_header(c) for c in df.columns):
         for col in df.columns:
-            hits = df[col].dropna().astype(str).head(20).apply(
-                _looks_like_date_value
-            ).sum()
+            hits = df[col].dropna().astype(str).head(20).apply(_looks_like_date_value).sum()
             if hits >= 2:
                 df = df.rename(columns={col: "Date"})
                 break
@@ -357,14 +357,6 @@ def process_file(uploaded, pdf_password=""):
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
     # ── Filter: keep only rows with actual transactions ───────────
-    wd_col = df["WITHDRAWAL AMT"]
-    dep_col = df["DEPOSIT AMT"]
-    debug_msg = "ROWS=" + str(len(df)) + " COLS=" + str(list(df.columns))
-    debug_msg += " | WD_SAMPLE=" + str(wd_col.head(5).tolist())
-    debug_msg += " | DEP_SAMPLE=" + str(dep_col.head(5).tolist())
-    debug_msg += " | WD>0=" + str((wd_col > 0).sum())
-    debug_msg += " | DEP>0=" + str((dep_col > 0).sum())
-    raise ValueError(debug_msg)
     df = df[(df["WITHDRAWAL AMT"] > 0) | (df["DEPOSIT AMT"] > 0)].copy()
     df.dropna(subset=["DATE"], inplace=True)
 
