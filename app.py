@@ -348,9 +348,15 @@ def process_file(uploaded, pdf_password=""):
                       .str.replace(r"[,₹$£€Rs.\s]", "", regex=True)
                       .str.strip())
 
-    df["WITHDRAWAL AMT"] = pd.to_numeric(clean_amount(df["WITHDRAWAL AMT"]), errors="coerce").fillna(0)
-    df["DEPOSIT AMT"]    = pd.to_numeric(clean_amount(df["DEPOSIT AMT"]),    errors="coerce").fillna(0)
-    df["BALANCE AMT"]    = pd.to_numeric(clean_amount(df["BALANCE AMT"]),    errors="coerce").fillna(0)
+    def _clean_amt(s):
+        return (pd.Series(s).astype(str)
+                  .str.replace(",", "", regex=False)
+                  .str.replace("Rs.", "", regex=False)
+                  .str.replace("Rs", "", regex=False)
+                  .str.strip())
+    df["WITHDRAWAL AMT"] = pd.to_numeric(_clean_amt(df["WITHDRAWAL AMT"]), errors="coerce").fillna(0)
+    df["DEPOSIT AMT"]    = pd.to_numeric(_clean_amt(df["DEPOSIT AMT"]),    errors="coerce").fillna(0)
+    df["BALANCE AMT"]    = pd.to_numeric(_clean_amt(df["BALANCE AMT"]),    errors="coerce").fillna(0)
 
 
     df = df[(df["WITHDRAWAL AMT"] > 0) | (df["DEPOSIT AMT"] > 0)].copy()
