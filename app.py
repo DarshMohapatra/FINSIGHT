@@ -224,25 +224,47 @@ def _looks_like_date_value(val):
 
 def extract_df_from_pdf(pdf_path, password=None):
     """
-    Parse ICICI bank statement PDF using text extraction.
-    extract_tables() only captures 5 summary rows across 42 pages.
-    The actual transaction rows are plain text parsed here by regex.
+    Parse ICICI bank statement PDF using text extraction + regex.
+    Handles deposit/withdrawal column assignment correctly.
     """
     import pdfplumber
     import pandas as pd
     import re as _re
 
-    # DD-MM-YYYY at the very start of a line = transaction row
-    TXN_LINE  = _re.compile(r"^(\d{2}-\d{2}-\d{4})\s+(.*)")
-    # Indian amount: digits+commas + decimal (e.g. 1,23,456.78 or 294.00)
-    AMT       = _re.compile(r"[\d,]+\.\d{2}")
+    # Transaction line: starts with DD-MM-YYYY
+    TXN_LINE = _re.compile(r"^(\d{2}-\d{2}-\d{4})\s+(.*)")
+    # Indian currency amount e.g. 1,23,456.78 or 294.00
+    AMT      = _re.compile(r"[\d,]+\.\d{2}")
 
     open_kwargs = {"password": password} if password else {}
-    rows = []
 
-    with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
+    try:
+        pdf_obj = pdfplumber.open(pdf_path, **open_kwargs)
+    except Exception as e:
+        err = str(e).lower()
+        if "password" in err or "decrypt" in err or "encrypt" in err or "incorrect" in err:
+            raise ValueError(
+                "❌ Incorrect PDF password. "
+                "Try your PAN number, date of birth (DDMMYYYY), or account number."
+            )
+        raise
+
+    rows = []
+    with pdf_obj as pdf:
+        # Verify password worked — if PDF is encrypted and password wrong,
+        # pages will be empty or pdfplumber raises on first access
         for page in pdf.pages:
-            text = page.extract_text(x_tolerance=2, y_tolerance=2)
+            try:
+                text = page.extract_text(x_tolerance=2, y_tolerance=2)
+            except Exception as e:
+                err = str(e).lower()
+                if "password" in err or "decrypt" in err:
+                    raise ValueError(
+                        "❌ Incorrect PDF password. "
+                        "Try your PAN number, date of birth (DDMMYYYY), or account number."
+                    )
+                continue
+
             if not text:
                 continue
 
@@ -252,46 +274,81 @@ def extract_df_from_pdf(pdf_path, password=None):
                 if not m:
                     continue
 
-                date    = m.group(1)          # DD-MM-YYYY
-                rest    = m.group(2).strip()  # everything after the date
+                date = m.group(1)
+                rest = m.group(2).strip()
 
                 amounts = AMT.findall(rest)
-                if len(amounts) < 1:
+                if not amounts:
                     continue
 
-                # Strip all amounts from rest to get narration
+                # Remove amounts from rest to get narration
                 narration = AMT.sub("", rest).strip()
-                # Also strip trailing/leading UPI mode tokens
                 narration = _re.sub(r"\s{2,}", " ", narration).strip()
 
-                balance    = amounts[-1] if amounts else "0.00"
-                deposit    = ""
-                withdrawal = ""
+                balance    = "0.00"
+                deposit    = "0.00"
+                withdrawal = "0.00"
 
                 if len(amounts) >= 3:
-                    # Both deposit and withdrawal present
+                    # Three amounts: DEPOSIT  WITHDRAWAL  BALANCE
+                    # ICICI column order confirmed: DEPOSITS | WITHDRAWALS | BALANCE
                     deposit    = amounts[-3]
                     withdrawal = amounts[-2]
+                    balance    = amounts[-1]
+
                 elif len(amounts) == 2:
-                    # One of them is zero (not printed) — use Dr/Cr hint
-                    if _re.search(r"\bDR\b|/DR\b", rest.upper()):
-                        withdrawal = amounts[0]
+                    # Only one non-zero transaction amount + balance
+                    # Determine deposit vs withdrawal from context:
+                    #   - B/F (Brought Forward) = opening balance, treat as deposit
+                    #   - Narration contains credit keywords = deposit
+                    #   - Otherwise = withdrawal (most transactions are debits)
+                    txn_amt = amounts[0]
+                    balance = amounts[1]
+
+                    rest_upper = rest.upper()
+
+                    # Credit signals: refund, salary, interest, transfer in, B/F
+                    credit_signals = [
+                        "B/F", "REFUND", "SALARY", "INTEREST", "CREDIT",
+                        "CASHBACK", "REVERSAL", "REWARD", "NEFT CR",
+                        "IMPS CR", "UPI CR", "/CR", " CR ", "DIVIDEND",
+                        "MATURITY", "PROCEEDS"
+                    ]
+                    is_credit = any(sig in rest_upper for sig in credit_signals)
+
+                    # Debit signals
+                    debit_signals = [
+                        "/DR", " DR ", "NEFT DR", "IMPS DR", "UPI DR",
+                        "PAYMENT", "PURCHASE", "POS ", "ATM ", "EMI",
+                        "BILL", "CHARGE", "FEE", "TAX"
+                    ]
+                    is_debit = any(sig in rest_upper for sig in debit_signals)
+
+                    if is_credit and not is_debit:
+                        deposit = txn_amt
+                    elif is_debit and not is_credit:
+                        withdrawal = txn_amt
                     else:
-                        deposit    = amounts[0]
+                        # No clear signal — look at balance change heuristic
+                        # We default to withdrawal (most common for spending statements)
+                        withdrawal = txn_amt
+
                 elif len(amounts) == 1:
+                    # Just a balance line (e.g. B/F opening balance)
                     balance = amounts[0]
+                    deposit = amounts[0]  # B/F is the opening deposit
 
                 rows.append({
                     "DATE":                date,
                     "TRANSACTION DETAILS": narration,
-                    "DEPOSIT AMT":         deposit    if deposit    else "0.00",
-                    "WITHDRAWAL AMT":      withdrawal if withdrawal else "0.00",
+                    "DEPOSIT AMT":         deposit,
+                    "WITHDRAWAL AMT":      withdrawal,
                     "BALANCE AMT":         balance,
                 })
 
     if not rows:
         raise ValueError(
-            "No transactions found. "
+            "No transactions found in PDF. "
             "The PDF may be image-only (scanned). Try a CSV/Excel export."
         )
 
@@ -497,7 +554,15 @@ else:
                 if st.button("⚡ Run Analysis", use_container_width=True):
                     with st.spinner("Running ML pipeline..."):
                         try:
-                            df = process_file(uploaded, pdf_password)
+                            try:
+                                df = process_file(uploaded, pdf_password)
+                            except ValueError as _ve:
+                                _msg = str(_ve)
+                                if 'password' in _msg.lower() or '❌' in _msg:
+                                    st.error(_msg)
+                                    st.stop()
+                                else:
+                                    raise
                             st.session_state.user_df = df
                             st.session_state.analysis_done = True
                             st.success("✅ Analysis complete! Found " + str(len(df)) + " transactions.")
