@@ -357,6 +357,14 @@ def process_file(uploaded, pdf_password=""):
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
     # ── Filter: keep only rows with actual transactions ───────────
+    # DEBUG — remove after fix
+    raise ValueError(
+        f"DEBUG rows={len(df)} cols={list(df.columns)}"
+        f"\nWD sample: {df[\"WITHDRAWAL AMT\"].head(5).tolist()}"
+        f"\nDEP sample: {df[\"DEPOSIT AMT\"].head(5).tolist()}"
+        f"\nWD>0 count: {(df[\"WITHDRAWAL AMT\"]>0).sum()}"
+        f"\nDEP>0 count: {(df[\"DEPOSIT AMT\"]>0).sum()}"
+    )
     df = df[(df["WITHDRAWAL AMT"] > 0) | (df["DEPOSIT AMT"] > 0)].copy()
     df.dropna(subset=["DATE"], inplace=True)
 
