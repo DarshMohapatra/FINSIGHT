@@ -357,14 +357,14 @@ def process_file(uploaded, pdf_password=""):
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
     # ── Filter: keep only rows with actual transactions ───────────
-    # DEBUG — remove after fix
-    raise ValueError(
-        f"DEBUG rows={len(df)} cols={list(df.columns)}"
-        f"\nWD sample: {df[\"WITHDRAWAL AMT\"].head(5).tolist()}"
-        f"\nDEP sample: {df[\"DEPOSIT AMT\"].head(5).tolist()}"
-        f"\nWD>0 count: {(df[\"WITHDRAWAL AMT\"]>0).sum()}"
-        f"\nDEP>0 count: {(df[\"DEPOSIT AMT\"]>0).sum()}"
-    )
+    wd_col = df["WITHDRAWAL AMT"]
+    dep_col = df["DEPOSIT AMT"]
+    debug_msg = "ROWS=" + str(len(df)) + " COLS=" + str(list(df.columns))
+    debug_msg += " | WD_SAMPLE=" + str(wd_col.head(5).tolist())
+    debug_msg += " | DEP_SAMPLE=" + str(dep_col.head(5).tolist())
+    debug_msg += " | WD>0=" + str((wd_col > 0).sum())
+    debug_msg += " | DEP>0=" + str((dep_col > 0).sum())
+    raise ValueError(debug_msg)
     df = df[(df["WITHDRAWAL AMT"] > 0) | (df["DEPOSIT AMT"] > 0)].copy()
     df.dropna(subset=["DATE"], inplace=True)
 
