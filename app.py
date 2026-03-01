@@ -223,25 +223,145 @@ def _looks_like_date_value(val):
     return any(re.search(p, val.strip(), re.IGNORECASE) for p in patterns)
 
 def extract_df_from_pdf(pdf_path, password=None):
+    """
+    Parse ICICI bank statement PDF.
+    Line format: DATE  NARRATION  AMOUNT  BALANCE
+    Deposit vs withdrawal determined by balance delta (prev_bal ± amt = new_bal).
+    B/F opening balance lines are excluded from transactions.
+    """
     import pdfplumber
+    import pandas as pd
     import re as _re
-    AMT = _re.compile(r"[\d,]+\.\d{2}")
+
+    TXN_START = _re.compile(r"^(\d{2}-\d{2}-\d{4})\s+(.*)")
+    AMT_PAT   = _re.compile(r"[\d,]+\.\d{2}")
+
+    def to_float(s):
+        try:
+            return float(str(s).replace(",", ""))
+        except Exception:
+            return None
+
     open_kwargs = {"password": password} if password else {}
-    dump = []
-    with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
-        for pg_num, page in enumerate(pdf.pages[1:5], start=2):
-            text = page.extract_text(x_tolerance=2, y_tolerance=2) or ""
-            dump.append(f"=== PAGE {pg_num} ===")
+    try:
+        pdf_file = pdfplumber.open(pdf_path, **open_kwargs)
+    except Exception as e:
+        err = str(e).lower()
+        if any(k in err for k in ["password", "decrypt", "encrypt", "incorrect"]):
+            raise ValueError(
+                "❌ Incorrect PDF password. "
+                "Try your PAN number, date of birth (DDMMYYYY), or account number."
+            )
+        raise
+
+    raw_rows   = []   # (date_str, narration, amt_float, bal_float)
+    prev_bal   = None
+
+    with pdf_file as pdf:
+        for page in pdf.pages:
+            try:
+                text = page.extract_text(x_tolerance=2, y_tolerance=2)
+            except Exception:
+                continue
+            if not text:
+                continue
+
             for raw in text.splitlines():
                 line = raw.strip()
-                if _re.match(r"^\d{2}-\d{2}-\d{4}", line):
-                    amts = AMT.findall(line)
-                    dump.append(f"LINE: {repr(line)}")
-                    dump.append(f"  AMOUNTS: {amts}")
-                    dump.append("")
-                    if len(dump) > 80:
-                        break
-    raise ValueError("\n".join(dump[:80]))
+                m = TXN_START.match(line)
+                if not m:
+                    continue
+
+                date_str = m.group(1)
+                rest     = m.group(2).strip()
+                amounts  = AMT_PAT.findall(rest)
+
+                if len(amounts) == 0:
+                    continue
+
+                # B/F line: only 1 amount = opening balance, set prev_bal and skip
+                if len(amounts) == 1:
+                    prev_bal = to_float(amounts[0])
+                    continue
+
+                # Normal line: last amount = new balance, second-to-last = txn amount
+                bal_str = amounts[-1]
+                amt_str = amounts[-2]
+                bal     = to_float(bal_str)
+                amt     = to_float(amt_str)
+
+                # Narration = everything before the first amount
+                first_amt_pos = rest.index(amounts[0])
+                narration     = rest[:first_amt_pos].strip()
+
+                # Skip lines with no narration and no meaningful content
+                # (these are continuation lines or page totals)
+                if not narration and len(amounts) == 2:
+                    # Could be a split narration line — still record it
+                    pass
+
+                raw_rows.append((date_str, narration, amt, bal))
+                prev_bal = bal
+
+    if not raw_rows:
+        raise ValueError(
+            "No transactions found. "
+            "PDF may be image-only (scanned). Try a CSV/Excel export instead."
+        )
+
+    # Now assign deposit vs withdrawal using balance delta
+    rows = []
+    prev_bal = None
+    for date_str, narration, amt, bal in raw_rows:
+        deposit    = 0.0
+        withdrawal = 0.0
+
+        if prev_bal is not None and amt is not None and bal is not None:
+            # Check which direction the balance moved
+            expected_withdrawal = round(prev_bal - amt, 2)
+            expected_deposit    = round(prev_bal + amt, 2)
+            bal_rounded         = round(bal, 2)
+
+            tol = 1.0  # 1 rupee tolerance for rounding
+
+            if abs(bal_rounded - expected_withdrawal) <= tol:
+                withdrawal = amt
+            elif abs(bal_rounded - expected_deposit) <= tol:
+                deposit = amt
+            else:
+                # Balance delta unclear — fall back to keyword hint
+                rest_upper = narration.upper()
+                credit_kws = ["REFUND","SALARY","INTEREST","CASHBACK",
+                              "REVERSAL","REWARD","DIVIDEND","B/F","/CR"," CR "]
+                if any(k in rest_upper for k in credit_kws):
+                    deposit = amt
+                else:
+                    withdrawal = amt
+        else:
+            # No previous balance to compare — use keyword hint
+            rest_upper = narration.upper()
+            credit_kws = ["REFUND","SALARY","INTEREST","CASHBACK",
+                          "REVERSAL","REWARD","DIVIDEND","B/F","/CR"," CR "]
+            if any(k in rest_upper for k in credit_kws):
+                deposit = amt
+            else:
+                withdrawal = amt
+
+        prev_bal = bal
+
+        rows.append({
+            "DATE":                date_str,
+            "TRANSACTION DETAILS": narration,
+            "DEPOSIT AMT":         deposit,
+            "WITHDRAWAL AMT":      withdrawal,
+            "BALANCE AMT":         bal if bal else 0.0,
+        })
+
+    df = pd.DataFrame(rows)
+    df["DATE"] = pd.to_datetime(df["DATE"], format="%d-%m-%Y", errors="coerce")
+    df = df.dropna(subset=["DATE"])
+    df = df.sort_values("DATE").reset_index(drop=True)
+    return df
 
 def process_file(uploaded, pdf_password=""):
     # ── Parse file into raw DataFrame ─────────────────────────────
