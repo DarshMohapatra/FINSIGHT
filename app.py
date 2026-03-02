@@ -735,13 +735,28 @@ else:
             with st.spinner("Training forecast model..."):
                 try:
                     from prophet import Prophet
-                    ms = df.groupby(df["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
+                    # Filter out anomalous transactions before forecasting
+                    df_fc = df[df["IS_ANOMALY"] == 0] if "IS_ANOMALY" in df.columns else df
+                    ms = df_fc.groupby(df_fc["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
                     ms.columns = ["ds", "y"]
                     ms["ds"] = ms["ds"].dt.to_timestamp()
-                    m = Prophet(yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False, changepoint_prior_scale=0.05)
+                    # Remove outlier months (beyond 2 std devs)
+                    mean_y, std_y = ms["y"].mean(), ms["y"].std()
+                    ms = ms[ms["y"].between(mean_y - 2*std_y, mean_y + 2*std_y)]
+                    ms = ms[ms["y"] > 0].reset_index(drop=True)
+                    m = Prophet(
+                        yearly_seasonality=True,
+                        weekly_seasonality=False,
+                        daily_seasonality=False,
+                        changepoint_prior_scale=0.1,
+                        seasonality_mode="multiplicative"
+                    )
                     m.fit(ms)
                     future = m.make_future_dataframe(periods=6, freq="MS")
                     fc = m.predict(future)
+                    fc["yhat"]       = fc["yhat"].clip(lower=0)
+                    fc["yhat_lower"] = fc["yhat_lower"].clip(lower=0)
+                    fc["yhat_upper"] = fc["yhat_upper"].clip(lower=0)
                     fig2, ax2 = dark_fig(2, 1, (14, 10))
                     ax2[0].plot(ms["ds"], ms["y"], color="#00c8e0", linewidth=2.5, label="Actual")
                     ax2[0].plot(fc["ds"], fc["yhat"], color="#00f0a0", linewidth=2, linestyle="--", label="Forecast")
