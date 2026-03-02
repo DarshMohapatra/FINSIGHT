@@ -825,7 +825,25 @@ else:
         else:
             df_sc = st.session_state["user_df"]
             card_opts = {c["bank"]+" — "+c["card_name"]+" ("+("FREE" if c["annual_fee"]==0 else "₹"+str(c["annual_fee"])+"/yr")+")": c["card_id"] for c in SC_CARD_MASTER}
-            sel = st.multiselect("Select credit cards you own:", list(card_opts.keys()), key="sc_wallet_sel")
+            import re as _re
+            _patterns = [
+                (r"HDFC.*(CREDIT|CC|CARD|CRD)",    ["HDFC Bank — Regalia (₹2500/yr)", "HDFC Bank — Millennia (₹1000/yr)", "HDFC Bank — MoneyBack+ (₹500/yr)"]),
+                (r"AXIS.*(CREDIT|CC|CARD|CRD)",    ["Axis Bank — ACE (₹499/yr)", "Axis Bank — Flipkart (₹500/yr)"]),
+                (r"ICICI.*(CREDIT|CC|CARD|CRD)",   ["ICICI Bank — Amazon Pay (FREE)", "ICICI Bank — Coral (₹500/yr)"]),
+                (r"SBI.*(CREDIT|CC|CARD)|SBICRD",  ["SBI Card — Cashback (₹999/yr)", "SBI Card — SimplyCLICK (₹499/yr)"]),
+                (r"KOTAK.*(CREDIT|CC|CARD|CRD)",   ["Kotak Mahindra Bank — 811 #DreamDifferent (FREE)"]),
+                (r"MASTERCARD.*(BILL|PAYMENT|PAY)", ["HDFC Bank — MoneyBack+ (₹500/yr)", "Axis Bank — Flipkart (₹500/yr)"]),
+                (r"AMEX|AMERICAN EXPRESS",          ["American Express — Membership Rewards Credit Card (₹1500/yr)"]),
+            ]
+            _wdr = df_sc[df_sc["WITHDRAWAL AMT"]>0]["TRANSACTION DETAILS"].astype(str).str.upper()
+            _auto = []
+            for _pat, _cards in _patterns:
+                if _wdr.str.contains(_pat, regex=True, na=False).any():
+                    for _c in _cards:
+                        if _c in card_opts and _c not in _auto: _auto.append(_c)
+            if _auto:
+                st.markdown(f'<div style="margin-bottom:10px;padding:10px 14px;background:rgba(0,245,160,0.06);border:1px solid rgba(0,245,160,0.2);border-radius:8px;font-size:12px;color:#00f5a0">⚡ Auto-detected {len(_auto)} possible card(s) from your statement — confirm or edit below</div>', unsafe_allow_html=True)
+            sel = st.multiselect("Select credit cards you own:", list(card_opts.keys()), default=[x for x in _auto if x in card_opts], key="sc_wallet_sel")
             wallet_sc = [card_opts[s] for s in sel]
             run_sc = st.button("⚡ Analyse Cashback Potential", key="sc_run_btn", disabled=(len(wallet_sc)==0))
             if run_sc and wallet_sc:
