@@ -861,7 +861,15 @@ else:
                             _auto.append(_k)
             if _auto:
                 st.markdown(f'<div style="margin-bottom:10px;padding:10px 14px;background:rgba(0,245,160,0.06);border:1px solid rgba(0,245,160,0.2);border-radius:8px;font-size:12px;color:#00f5a0">⚡ Auto-detected {len(_auto)} card(s) from your statement — confirm or edit below</div>', unsafe_allow_html=True)
-            sel = st.multiselect("Select credit cards you own:", _all_keys, default=_auto, key="sc_wallet_sel")
+            _sig = str(len(df_sc))
+            if st.session_state.get("_sc_sig") != _sig:
+                st.session_state["_sc_sig"] = _sig
+                st.session_state["sc_auto_detected"] = _auto
+                if "sc_wallet_sel" in st.session_state:
+                    del st.session_state["sc_wallet_sel"]
+            sel = st.multiselect("Select credit cards you own:", _all_keys,
+                default=st.session_state.get("sc_auto_detected", []),
+                key="sc_wallet_sel")
             wallet_sc = [card_opts[s] for s in sel]
             run_sc = st.button("⚡ Analyse Cashback Potential", key="sc_run_btn", disabled=(len(wallet_sc)==0))
             if run_sc and wallet_sc:
