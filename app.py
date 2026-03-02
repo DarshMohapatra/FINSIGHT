@@ -760,29 +760,45 @@ else:
                         values = ms["y"].values
                         last_date = ms["ds"].max()
 
-                        # Weighted moving average: recent months count more
-                        weights = np.array([i + 1 for i in range(n)], dtype=float)
-                        weights /= weights.sum()
-                        weighted_avg = np.dot(weights, values)
-
-                        # Linear trend: how much spending changes month-over-month
+                        # Linear trend line through all months
+                        x = np.arange(n, dtype=float)
                         if n >= 2:
-                            x = np.arange(n, dtype=float)
-                            slope = np.polyfit(x, values, 1)[0]
+                            slope, intercept = np.polyfit(x, values, 1)
                         else:
-                            slope = 0.0
+                            slope, intercept = 0.0, values[0]
 
-                        # Project next 6 months: weighted avg + cumulative trend
+                        # Seasonal ratio per calendar month (Jan=1..Dec=12)
+                        # How much each calendar month deviates from overall avg
+                        overall_avg = values.mean()
+                        ms["cal_month"] = ms["ds"].dt.month
+                        cal_avg = ms.groupby("cal_month")["y"].mean()
+                        seasonal = {}
+                        for m_num in range(1, 13):
+                            if m_num in cal_avg.index and overall_avg > 0:
+                                seasonal[m_num] = cal_avg[m_num] / overall_avg
+                            else:
+                                seasonal[m_num] = 1.0
+
+                        # Project next 6 months
                         future_dates = pd.date_range(last_date + pd.DateOffset(months=1), periods=6, freq="MS")
                         predicted = []
-                        for i in range(1, 7):
-                            pred = max(weighted_avg + slope * i, 0)
+                        for i, fdate in enumerate(future_dates):
+                            # Trend: extrapolate the trend line
+                            trend_val = intercept + slope * (n + i)
+                            # Seasonal: adjust by calendar month ratio
+                            s_ratio = seasonal[fdate.month]
+                            pred = max(trend_val * s_ratio, 0)
                             predicted.append(pred)
 
-                        # Confidence band: +/- std dev of monthly variation, widening over time
-                        std_y = values.std() if n >= 2 else weighted_avg * 0.1
-                        lower = [max(p - std_y * (0.5 + 0.15 * i), 0) for i, p in enumerate(predicted)]
-                        upper = [p + std_y * (0.5 + 0.15 * i) for i, p in enumerate(predicted)]
+                        # Confidence band: +/- std dev of residuals, widening over time
+                        if n >= 2:
+                            trend_fitted = intercept + slope * x
+                            residuals = values - trend_fitted
+                            std_y = residuals.std()
+                        else:
+                            std_y = overall_avg * 0.1
+                        lower = [max(p - std_y * (0.8 + 0.2 * i), 0) for i, p in enumerate(predicted)]
+                        upper = [p + std_y * (0.8 + 0.2 * i) for i, p in enumerate(predicted)]
 
                         fc = pd.DataFrame({
                             "ds": future_dates,
