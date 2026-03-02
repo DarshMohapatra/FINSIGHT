@@ -750,21 +750,18 @@ else:
                 with st.spinner("Training forecast model on your data..."):
                     try:
                         from prophet import Prophet
-                        # Filter out anomalous transactions before forecasting
+                        # Filter anomalous TRANSACTIONS before aggregating to months
                         df_fc = df[df["IS_ANOMALY"] == 0] if "IS_ANOMALY" in df.columns else df
                         ms = df_fc.groupby(df_fc["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
                         ms.columns = ["ds", "y"]
                         ms["ds"] = ms["ds"].dt.to_timestamp()
-                        # Remove outlier months (beyond 2 std devs)
-                        mean_y, std_y = ms["y"].mean(), ms["y"].std()
-                        ms = ms[ms["y"].between(mean_y - 2*std_y, mean_y + 2*std_y)]
                         ms = ms[ms["y"] > 0].reset_index(drop=True)
                         m = Prophet(
                             yearly_seasonality=True,
                             weekly_seasonality=False,
                             daily_seasonality=False,
-                            changepoint_prior_scale=0.1,
-                            seasonality_mode="multiplicative"
+                            changepoint_prior_scale=0.05,
+                            seasonality_mode="additive"
                         )
                         m.fit(ms)
                         future = m.make_future_dataframe(periods=6, freq="MS")
@@ -790,7 +787,7 @@ else:
                     ax2[0].set_title("Monthly Withdrawal Forecast", fontsize=13, pad=14)
                     ax2[0].yaxis.set_major_formatter(mticker.FuncFormatter(cfmt))
                     ax2[0].legend(facecolor="#080d1a", labelcolor="#c8d0e0", fontsize=9)
-                    fo = fc.tail(6)
+                    fo = fc[fc["ds"] > ms["ds"].max()].head(6)
                     bars = ax2[1].bar(fo["ds"].dt.strftime("%b %Y"), fo["yhat"], color="#7b61ff", alpha=0.85, width=0.6)
                     ax2[1].set_title("Predicted Spending Next 6 Months", fontsize=13, pad=14)
                     ax2[1].yaxis.set_major_formatter(mticker.FuncFormatter(cfmt))
