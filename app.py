@@ -487,7 +487,7 @@ def process_file(uploaded, pdf_password=""):
     for col in ["WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"]:
         df[col] = (df[col].astype(str)
                           .str.replace(",", "", regex=False)
-                          .str.replace("Rs.", "", regex=False)
+                          .str.replace("Rs.", "", regex=False).str.replace("₹", "", regex=False)
                           .str.replace("Rs", "", regex=False)
                           .str.strip())
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -532,10 +532,10 @@ def dark_fig(rows, cols, size):
 
 def cfmt(x, pos):
     raw = abs(x)
-    if raw >= 1e7:   return "Rs." + str(round(x/1e7, 1)) + "Cr"
-    elif raw >= 1e5: return "Rs." + str(round(x/1e5, 1)) + "L"
-    elif raw >= 1e3: return "Rs." + str(round(x/1e3, 0))[:-2] + "K"
-    else:            return "Rs." + str(round(x, 0))[:-2]
+    if raw >= 1e7:   return "₹" + str(round(x/1e7, 1)) + "Cr"
+    elif raw >= 1e5: return "₹" + str(round(x/1e5, 1)) + "L"
+    elif raw >= 1e3: return "₹" + str(round(x/1e3, 1)) + "K"
+    else:            return "₹" + str(round(x, 0))[:-2]
 
 
 def build_context(df):
@@ -826,24 +826,27 @@ else:
             df_sc = st.session_state["user_df"]
             card_opts = {c["bank"]+" — "+c["card_name"]+" ("+("FREE" if c["annual_fee"]==0 else "₹"+str(c["annual_fee"])+"/yr")+")": c["card_id"] for c in SC_CARD_MASTER}
             import re as _re
-            _patterns = [
-                (r"HDFC.*(CREDIT|CC|CARD|CRD)",    ["HDFC Bank — Regalia (₹2500/yr)", "HDFC Bank — Millennia (₹1000/yr)", "HDFC Bank — MoneyBack+ (₹500/yr)"]),
-                (r"AXIS.*(CREDIT|CC|CARD|CRD)",    ["Axis Bank — ACE (₹499/yr)", "Axis Bank — Flipkart (₹500/yr)"]),
-                (r"ICICI.*(CREDIT|CC|CARD|CRD)",   ["ICICI Bank — Amazon Pay (FREE)", "ICICI Bank — Coral (₹500/yr)"]),
-                (r"SBI.*(CREDIT|CC|CARD)|SBICRD",  ["SBI Card — Cashback (₹999/yr)", "SBI Card — SimplyCLICK (₹499/yr)"]),
-                (r"KOTAK.*(CREDIT|CC|CARD|CRD)",   ["Kotak Mahindra Bank — 811 #DreamDifferent (FREE)"]),
-                (r"MASTERCARD.*(BILL|PAYMENT|PAY)", ["HDFC Bank — MoneyBack+ (₹500/yr)", "Axis Bank — Flipkart (₹500/yr)"]),
-                (r"AMEX|AMERICAN EXPRESS",          ["American Express — Membership Rewards Credit Card (₹1500/yr)"]),
-            ]
             _wdr = df_sc[df_sc["WITHDRAWAL AMT"]>0]["TRANSACTION DETAILS"].astype(str).str.upper()
             _auto = []
-            for _pat, _cards in _patterns:
+            _all_keys = list(card_opts.keys())
+            _bank_patterns = [
+                (r"HDFC.*(CREDIT|CC|CARD|CRD)",     "HDFC Bank"),
+                (r"AXIS.*(CREDIT|CC|CARD|CRD)",     "Axis Bank"),
+                (r"ICICI.*(CREDIT|CC|CARD|CRD)",    "ICICI Bank"),
+                (r"SBI.*(CREDIT|CC|CARD)|SBICRD",   "SBI Card"),
+                (r"KOTAK.*(CREDIT|CC|CARD|CRD)",    "Kotak Mahindra Bank"),
+                (r"IDFC.*(CREDIT|CC|CARD|CRD)",     "IDFC FIRST Bank"),
+                (r"MASTERCARD.*(BILL|PAYMENT|PAY)", "HDFC Bank"),
+                (r"AMEX|AMERICAN EXPRESS",          "American Express"),
+            ]
+            for _pat, _bank in _bank_patterns:
                 if _wdr.str.contains(_pat, regex=True, na=False).any():
-                    for _c in _cards:
-                        if _c in card_opts and _c not in _auto: _auto.append(_c)
+                    for _k in _all_keys:
+                        if _k.startswith(_bank) and _k not in _auto:
+                            _auto.append(_k)
             if _auto:
-                st.markdown(f'<div style="margin-bottom:10px;padding:10px 14px;background:rgba(0,245,160,0.06);border:1px solid rgba(0,245,160,0.2);border-radius:8px;font-size:12px;color:#00f5a0">⚡ Auto-detected {len(_auto)} possible card(s) from your statement — confirm or edit below</div>', unsafe_allow_html=True)
-            sel = st.multiselect("Select credit cards you own:", list(card_opts.keys()), default=[x for x in _auto if x in card_opts], key="sc_wallet_sel")
+                st.markdown(f'<div style="margin-bottom:10px;padding:10px 14px;background:rgba(0,245,160,0.06);border:1px solid rgba(0,245,160,0.2);border-radius:8px;font-size:12px;color:#00f5a0">⚡ Auto-detected {len(_auto)} card(s) from your statement — confirm or edit below</div>', unsafe_allow_html=True)
+            sel = st.multiselect("Select credit cards you own:", _all_keys, default=_auto, key="sc_wallet_sel")
             wallet_sc = [card_opts[s] for s in sel]
             run_sc = st.button("⚡ Analyse Cashback Potential", key="sc_run_btn", disabled=(len(wallet_sc)==0))
             if run_sc and wallet_sc:
@@ -858,7 +861,7 @@ else:
                 tot_ex = rdf["EXTRA"].sum()
                 eff_r  = (tot_cb/tot_sp*100) if tot_sp>0 else 0
                 c1,c2,c3,c4 = st.columns(4)
-                c1.markdown(f'<div class="metric-card"><div class="metric-lbl">TOTAL SPEND</div><div class="metric-val">₹{tot_sp/1e5:.1f}L</div></div>', unsafe_allow_html=True)
+                c1.markdown(f'<div class="metric-card"><div class="metric-lbl">TOTAL SPEND</div><div class="metric-val">₹{tot_sp:,.0f}</div></div>', unsafe_allow_html=True)
                 c2.markdown(f'<div class="metric-card"><div class="metric-lbl">BEST CASHBACK</div><div class="metric-val">₹{tot_cb:,.0f}</div></div>', unsafe_allow_html=True)
                 c3.markdown(f'<div class="metric-card"><div class="metric-lbl">EXTRA vs 1% CARD</div><div class="metric-val">₹{tot_ex:,.0f}</div></div>', unsafe_allow_html=True)
                 c4.markdown(f'<div class="metric-card"><div class="metric-lbl">EFFECTIVE RATE</div><div class="metric-val">{eff_r:.2f}%</div></div>', unsafe_allow_html=True)
