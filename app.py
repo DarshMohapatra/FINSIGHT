@@ -747,33 +747,53 @@ else:
             _need_retrain = (st.session_state.forecast_cache is None
                             or st.session_state.forecast_df_id != _df_id)
             if _need_retrain:
-                with st.spinner("Training forecast model on your data..."):
+                with st.spinner("Forecasting from your spending data..."):
                     try:
-                        from prophet import Prophet
-                        # Filter anomalous TRANSACTIONS before aggregating to months
+                        # Build monthly spending from user's actual data
                         df_fc = df[df["IS_ANOMALY"] == 0] if "IS_ANOMALY" in df.columns else df
                         ms = df_fc.groupby(df_fc["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
                         ms.columns = ["ds", "y"]
                         ms["ds"] = ms["ds"].dt.to_timestamp()
-                        ms = ms[ms["y"] > 0].reset_index(drop=True)
-                        m = Prophet(
-                            yearly_seasonality=True,
-                            weekly_seasonality=False,
-                            daily_seasonality=False,
-                            changepoint_prior_scale=0.05,
-                            seasonality_mode="additive"
-                        )
-                        m.fit(ms)
-                        future = m.make_future_dataframe(periods=6, freq="MS")
-                        fc = m.predict(future)
-                        fc["yhat"]       = fc["yhat"].clip(lower=0)
-                        fc["yhat_lower"] = fc["yhat_lower"].clip(lower=0)
-                        fc["yhat_upper"] = fc["yhat_upper"].clip(lower=0)
+                        ms = ms.sort_values("ds").reset_index(drop=True)
+
+                        n = len(ms)
+                        values = ms["y"].values
+                        last_date = ms["ds"].max()
+
+                        # Weighted moving average: recent months count more
+                        weights = np.array([i + 1 for i in range(n)], dtype=float)
+                        weights /= weights.sum()
+                        weighted_avg = np.dot(weights, values)
+
+                        # Linear trend: how much spending changes month-over-month
+                        if n >= 2:
+                            x = np.arange(n, dtype=float)
+                            slope = np.polyfit(x, values, 1)[0]
+                        else:
+                            slope = 0.0
+
+                        # Project next 6 months: weighted avg + cumulative trend
+                        future_dates = pd.date_range(last_date + pd.DateOffset(months=1), periods=6, freq="MS")
+                        predicted = []
+                        for i in range(1, 7):
+                            pred = max(weighted_avg + slope * i, 0)
+                            predicted.append(pred)
+
+                        # Confidence band: +/- std dev of monthly variation, widening over time
+                        std_y = values.std() if n >= 2 else weighted_avg * 0.1
+                        lower = [max(p - std_y * (0.5 + 0.15 * i), 0) for i, p in enumerate(predicted)]
+                        upper = [p + std_y * (0.5 + 0.15 * i) for i, p in enumerate(predicted)]
+
+                        fc = pd.DataFrame({
+                            "ds": future_dates,
+                            "yhat": predicted,
+                            "yhat_lower": lower,
+                            "yhat_upper": upper,
+                        })
                         st.session_state.forecast_cache = {"ms": ms, "fc": fc}
                         st.session_state.forecast_df_id = _df_id
                     except Exception as e:
                         st.error("Forecast error: " + str(e))
-                        st.info("Need at least 6 months of data for reliable forecasting.")
                         st.session_state.forecast_cache = None
             if st.session_state.forecast_cache is not None:
                 ms = st.session_state.forecast_cache["ms"]
@@ -781,13 +801,16 @@ else:
                 try:
                     fig2, ax2 = dark_fig(2, 1, (14, 10))
                     ax2[0].plot(ms["ds"], ms["y"], color="#00c8e0", linewidth=2.5, label="Actual")
-                    ax2[0].plot(fc["ds"], fc["yhat"], color="#00f0a0", linewidth=2, linestyle="--", label="Forecast")
+                    # Combine actual + forecast for a continuous line
+                    all_ds = pd.concat([ms[["ds"]], fc[["ds"]]]).reset_index(drop=True)
+                    all_yhat = list(ms["y"].values) + list(fc["yhat"].values)
+                    ax2[0].plot(all_ds["ds"], all_yhat, color="#00f0a0", linewidth=2, linestyle="--", label="Forecast")
                     ax2[0].fill_between(fc["ds"], fc["yhat_lower"], fc["yhat_upper"], alpha=0.12, color="#00f0a0")
                     ax2[0].axvline(x=ms["ds"].max(), color="#ff3c64", linestyle="--", linewidth=1.5, alpha=0.7, label="Forecast Start")
                     ax2[0].set_title("Monthly Withdrawal Forecast", fontsize=13, pad=14)
                     ax2[0].yaxis.set_major_formatter(mticker.FuncFormatter(cfmt))
                     ax2[0].legend(facecolor="#080d1a", labelcolor="#c8d0e0", fontsize=9)
-                    fo = fc[fc["ds"] > ms["ds"].max()].head(6)
+                    fo = fc
                     bars = ax2[1].bar(fo["ds"].dt.strftime("%b %Y"), fo["yhat"], color="#7b61ff", alpha=0.85, width=0.6)
                     ax2[1].set_title("Predicted Spending Next 6 Months", fontsize=13, pad=14)
                     ax2[1].yaxis.set_major_formatter(mticker.FuncFormatter(cfmt))
@@ -804,7 +827,6 @@ else:
                     st.dataframe(ft[["Month","Predicted","Lower","Upper"]], use_container_width=True, hide_index=True)
                 except Exception as e:
                     st.error("Forecast error: " + str(e))
-                    st.info("Need at least 6 months of data for reliable forecasting.")
 
     with tab4:
         st.markdown('<div style="padding:28px 0 0;font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:8px;">AI FINANCIAL ADVISOR</div>', unsafe_allow_html=True)
