@@ -818,12 +818,12 @@ else:
 
     with tab5:
         st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 01 — SMARTCASH</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💳 Card Reward Maximiser</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Find the best card in your wallet for every rupee you spend.</div></div>', unsafe_allow_html=True)
-        if st.session_state.get("df") is None:
+        if st.session_state.get("user_df") is None:
             st.info("Upload your bank statement in the UPLOAD tab first.")
         elif not SC_CARD_MASTER:
             st.error("Card database failed to load — check card_master.json on GitHub.")
         else:
-            df_sc = st.session_state["df"]
+            df_sc = st.session_state["user_df"]
             card_opts = {c["bank"]+" — "+c["card_name"]+" ("+("FREE" if c["annual_fee"]==0 else "₹"+str(c["annual_fee"])+"/yr")+")": c["card_id"] for c in SC_CARD_MASTER}
             sel = st.multiselect("Select credit cards you own:", list(card_opts.keys()), key="sc_wallet_sel")
             wallet_sc = [card_opts[s] for s in sel]
