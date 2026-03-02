@@ -667,7 +667,7 @@ else:
                                     raise
                             st.session_state.user_df = df
                             st.session_state.analysis_done = True
-                            # Invalidate forecast cache so Prophet retrains on new data
+                            # Invalidate forecast cache so it retrains on new data
                             st.session_state.forecast_cache = None
                             st.session_state.forecast_df_id = None
                             # Invalidate SmartCash results from previous file
@@ -988,4 +988,4 @@ else:
                 st.dataframe(top20, use_container_width=True, hide_index=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + PROPHET + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
+    st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + TREND FORECAST + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
