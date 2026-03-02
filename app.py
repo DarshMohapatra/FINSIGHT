@@ -63,43 +63,6 @@ for k, v in {"page": "landing", "user_df": None, "chat_history": [], "analysis_d
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# ── SmartCash: Load card databases from GitHub ────────────────────
-import urllib.request as _urllib
-
-def _load_json_from_github(filename):
-    """Load a JSON file directly from the public GitHub repo."""
-    try:
-        base_url = "https://raw.githubusercontent.com/DarshMohapatra/FINSIGHT/main/"
-        with _urllib.urlopen(base_url + filename, timeout=5) as resp:
-            return json.load(resp)
-    except Exception:
-        return []
-
-@st.cache_data(ttl=3600)   # cache for 1 hour — avoid re-fetching on every rerun
-def load_card_databases():
-    card_master  = _load_json_from_github("card_master.json")
-    card_rewards = _load_json_from_github("card_rewards.json")
-    return card_master, card_rewards
-
-SC_CARD_MASTER, SC_CARD_REWARDS = load_card_databases()
-SC_REWARDS_LOOKUP  = {r['card_id']: r['rates']    for r in SC_CARD_REWARDS}
-SC_CARD_LOOKUP     = {c['card_id']: c             for c in SC_CARD_MASTER}
-SC_CARD_NAME       = {c['card_id']: f"{c['bank']} {c['card_name']}"
-                      for c in SC_CARD_MASTER}
-SC_CATEGORY_MAP    = {
-    "Food & Dining" : "Food & Dining",
-    "Grocery"       : "Grocery",
-    "Shopping"      : "Shopping",
-    "Travel"        : "Travel",
-    "Fuel"          : "Fuel",
-    "Healthcare"    : "Healthcare",
-    "Entertainment" : "Entertainment",
-    "Utility"       : "Utility",
-    "Salary"        : "Other",
-    "Other"         : "Other",
-}
-
-
 # ── SmartCash globals ──────────────────────────────────────
 import json as _scj, urllib.request as _scu
 
@@ -524,7 +487,7 @@ def process_file(uploaded, pdf_password=""):
     for col in ["WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"]:
         df[col] = (df[col].astype(str)
                           .str.replace(",", "", regex=False)
-                          .str.replace("Rs.", "", regex=False).str.replace("₹", "", regex=False)
+                          .str.replace("Rs.", "", regex=False)
                           .str.replace("Rs", "", regex=False)
                           .str.strip())
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -569,10 +532,10 @@ def dark_fig(rows, cols, size):
 
 def cfmt(x, pos):
     raw = abs(x)
-    if raw >= 1e7:   return "₹" + str(round(x/1e7, 1)) + "Cr"
-    elif raw >= 1e5: return "₹" + str(round(x/1e5, 1)) + "L"
-    elif raw >= 1e3: return "₹" + str(round(x/1e3, 1)) + "K"
-    else:            return "₹" + str(round(x, 0))[:-2]
+    if raw >= 1e7:   return "Rs." + str(round(x/1e7, 1)) + "Cr"
+    elif raw >= 1e5: return "Rs." + str(round(x/1e5, 1)) + "L"
+    elif raw >= 1e3: return "Rs." + str(round(x/1e3, 0))[:-2] + "K"
+    else:            return "Rs." + str(round(x, 0))[:-2]
 
 
 def build_context(df):
@@ -772,28 +735,13 @@ else:
             with st.spinner("Training forecast model..."):
                 try:
                     from prophet import Prophet
-                    # Filter out anomalous transactions before forecasting
-                    df_fc = df[df["IS_ANOMALY"] == 0] if "IS_ANOMALY" in df.columns else df
-                    ms = df_fc.groupby(df_fc["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
+                    ms = df.groupby(df["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
                     ms.columns = ["ds", "y"]
                     ms["ds"] = ms["ds"].dt.to_timestamp()
-                    # Remove outlier months (beyond 2 std devs)
-                    mean_y, std_y = ms["y"].mean(), ms["y"].std()
-                    ms = ms[ms["y"].between(mean_y - 2*std_y, mean_y + 2*std_y)]
-                    ms = ms[ms["y"] > 0].reset_index(drop=True)
-                    m = Prophet(
-                        yearly_seasonality=True,
-                        weekly_seasonality=False,
-                        daily_seasonality=False,
-                        changepoint_prior_scale=0.1,
-                        seasonality_mode="multiplicative"
-                    )
+                    m = Prophet(yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False, changepoint_prior_scale=0.05)
                     m.fit(ms)
                     future = m.make_future_dataframe(periods=6, freq="MS")
                     fc = m.predict(future)
-                    fc["yhat"]       = fc["yhat"].clip(lower=0)
-                    fc["yhat_lower"] = fc["yhat_lower"].clip(lower=0)
-                    fc["yhat_upper"] = fc["yhat_upper"].clip(lower=0)
                     fig2, ax2 = dark_fig(2, 1, (14, 10))
                     ax2[0].plot(ms["ds"], ms["y"], color="#00c8e0", linewidth=2.5, label="Actual")
                     ax2[0].plot(fc["ds"], fc["yhat"], color="#00f0a0", linewidth=2, linestyle="--", label="Forecast")
@@ -870,43 +818,14 @@ else:
 
     with tab5:
         st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 01 — SMARTCASH</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💳 Card Reward Maximiser</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Find the best card in your wallet for every rupee you spend.</div></div>', unsafe_allow_html=True)
-        if st.session_state.get("user_df") is None:
+        if st.session_state.get("df") is None:
             st.info("Upload your bank statement in the UPLOAD tab first.")
         elif not SC_CARD_MASTER:
             st.error("Card database failed to load — check card_master.json on GitHub.")
         else:
-            df_sc = st.session_state["user_df"]
+            df_sc = st.session_state["df"]
             card_opts = {c["bank"]+" — "+c["card_name"]+" ("+("FREE" if c["annual_fee"]==0 else "₹"+str(c["annual_fee"])+"/yr")+")": c["card_id"] for c in SC_CARD_MASTER}
-            import re as _re
-            _wdr = df_sc[df_sc["WITHDRAWAL AMT"]>0]["TRANSACTION DETAILS"].astype(str).str.upper()
-            _auto = []
-            _all_keys = list(card_opts.keys())
-            _bank_patterns = [
-                (r"HDFC.*(CREDIT|CC|CARD|CRD)",     "HDFC Bank"),
-                (r"AXIS.*(CREDIT|CC|CARD|CRD)",     "Axis Bank"),
-                (r"ICICI.*(CREDIT|CC|CARD|CRD)",    "ICICI Bank"),
-                (r"SBI.*(CREDIT|CC|CARD)|SBICRD",   "SBI Card"),
-                (r"KOTAK.*(CREDIT|CC|CARD|CRD)",    "Kotak Mahindra Bank"),
-                (r"IDFC.*(CREDIT|CC|CARD|CRD)",     "IDFC FIRST Bank"),
-                (r"MASTERCARD.*(BILL|PAYMENT|PAY)", "HDFC Bank"),
-                (r"AMEX|AMERICAN EXPRESS",          "American Express"),
-            ]
-            for _pat, _bank in _bank_patterns:
-                if _wdr.str.contains(_pat, regex=True, na=False).any():
-                    for _k in _all_keys:
-                        if _k.startswith(_bank) and _k not in _auto:
-                            _auto.append(_k)
-            if _auto:
-                st.markdown(f'<div style="margin-bottom:10px;padding:10px 14px;background:rgba(0,245,160,0.06);border:1px solid rgba(0,245,160,0.2);border-radius:8px;font-size:12px;color:#00f5a0">⚡ Auto-detected {len(_auto)} card(s) from your statement — confirm or edit below</div>', unsafe_allow_html=True)
-            _sig = str(len(df_sc))
-            if st.session_state.get("_sc_sig") != _sig:
-                st.session_state["_sc_sig"] = _sig
-                st.session_state["sc_auto_detected"] = _auto
-                if "sc_wallet_sel" in st.session_state:
-                    del st.session_state["sc_wallet_sel"]
-            sel = st.multiselect("Select credit cards you own:", _all_keys,
-                default=st.session_state.get("sc_auto_detected", []),
-                key="sc_wallet_sel")
+            sel = st.multiselect("Select credit cards you own:", list(card_opts.keys()), key="sc_wallet_sel")
             wallet_sc = [card_opts[s] for s in sel]
             run_sc = st.button("⚡ Analyse Cashback Potential", key="sc_run_btn", disabled=(len(wallet_sc)==0))
             if run_sc and wallet_sc:
@@ -921,7 +840,7 @@ else:
                 tot_ex = rdf["EXTRA"].sum()
                 eff_r  = (tot_cb/tot_sp*100) if tot_sp>0 else 0
                 c1,c2,c3,c4 = st.columns(4)
-                c1.markdown(f'<div class="metric-card"><div class="metric-lbl">TOTAL SPEND</div><div class="metric-val">₹{tot_sp:,.0f}</div></div>', unsafe_allow_html=True)
+                c1.markdown(f'<div class="metric-card"><div class="metric-lbl">TOTAL SPEND</div><div class="metric-val">₹{tot_sp/1e5:.1f}L</div></div>', unsafe_allow_html=True)
                 c2.markdown(f'<div class="metric-card"><div class="metric-lbl">BEST CASHBACK</div><div class="metric-val">₹{tot_cb:,.0f}</div></div>', unsafe_allow_html=True)
                 c3.markdown(f'<div class="metric-card"><div class="metric-lbl">EXTRA vs 1% CARD</div><div class="metric-val">₹{tot_ex:,.0f}</div></div>', unsafe_allow_html=True)
                 c4.markdown(f'<div class="metric-card"><div class="metric-lbl">EFFECTIVE RATE</div><div class="metric-val">{eff_r:.2f}%</div></div>', unsafe_allow_html=True)
@@ -937,291 +856,4 @@ else:
                 st.dataframe(top20, use_container_width=True, hide_index=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + PROPHET + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True
-
-# ════════════════════════════════════════════════════════════════
-# SMARTCASH ENGINE FUNCTIONS
-# ════════════════════════════════════════════════════════════════
-
-def sc_get_best_card(amount, category, wallet):
-    """Return best card and cashback for a single transaction."""
-    mapped = SC_CATEGORY_MAP.get(category, "Other")
-    best_card, best_rate, best_cash = "NONE", 0, 0
-    all_results = []
-    for cid in wallet:
-        rates    = SC_REWARDS_LOOKUP.get(cid, {})
-        rate     = rates.get(mapped, rates.get("Other", 0))
-        cashback = round(amount * rate / 100, 2)
-        all_results.append((cid, rate, cashback))
-        if cashback > best_cash:
-            best_card, best_rate, best_cash = cid, rate, cashback
-    return {
-        "best_card_id"  : best_card,
-        "best_card_name": SC_CARD_NAME.get(best_card, best_card),
-        "best_rate"     : best_rate,
-        "best_cashback" : best_cash,
-        "baseline"      : round(amount * 1.0 / 100, 2),
-        "all_results"   : all_results
-    }
-
-def sc_run_analysis(df, wallet):
-    """Run SmartCash on full dataframe. Returns results dataframe."""
-    spending = df[
-        (df['WITHDRAWAL AMT'] > 0) &
-        (df['CATEGORY'].notna()) &
-        (df['CATEGORY'] != 'Salary')
-    ].copy()
-    rows = []
-    for _, row in spending.iterrows():
-        res = sc_get_best_card(
-            row['WITHDRAWAL AMT'], row['CATEGORY'], wallet
-        )
-        rows.append({
-            "DATE"         : row['DATE'],
-            "DESCRIPTION"  : row['TRANSACTION DETAILS'],
-            "CATEGORY"     : row['CATEGORY'],
-            "AMOUNT"       : row['WITHDRAWAL AMT'],
-            "BEST_CARD"    : res['best_card_name'],
-            "BEST_RATE"    : res['best_rate'],
-            "BEST_CASHBACK": res['best_cashback'],
-            "BASELINE"     : res['baseline'],
-            "EXTRA"        : round(res['best_cashback'] - res['baseline'], 2),
-        })
-    return pd.DataFrame(rows)
-
-def sc_category_summary(results_df):
-    """Aggregate results by category."""
-    return (
-        results_df
-        .groupby('CATEGORY')
-        .agg(
-            spend     = ('AMOUNT',        'sum'),
-            cashback  = ('BEST_CASHBACK', 'sum'),
-            baseline  = ('BASELINE',      'sum'),
-            txns      = ('AMOUNT',        'count'),
-            best_card = ('BEST_CARD',     lambda x: x.mode()[0]),
-            avg_rate  = ('BEST_RATE',     'mean'),
-        )
-        .assign(extra=lambda x: x['cashback'] - x['baseline'])
-        .sort_values('spend', ascending=False)
-        .reset_index()
-    )
-)
-
-    # ════════════════════════════════════════════════════════════
-    # 💳 SMARTCASH TAB
-    # ════════════════════════════════════════════════════════════
-    with tab5:
-        st.markdown("""
-        <div style="padding:40px 40px 0;">
-            <div style="font-family:DM Mono,monospace;font-size:10px;
-                        color:#00f5a0;letter-spacing:3px;margin-bottom:8px;">
-                FEATURE 01 — SMARTCASH
-            </div>
-            <div style="font-size:28px;font-weight:800;margin-bottom:8px;">
-                💳 Card Reward Maximiser
-            </div>
-            <div style="color:rgba(255,255,255,0.4);font-size:14px;
-                        margin-bottom:32px;">
-                Find the best card in your wallet for every rupee you spend.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.session_state.get('df') is None:
-            st.markdown("""
-            <div style="margin:40px;padding:32px;background:rgba(255,255,255,0.03);
-                        border:1px solid rgba(255,255,255,0.08);border-radius:16px;
-                        text-align:center;">
-                <div style="font-size:40px;margin-bottom:16px;">📤</div>
-                <div style="color:rgba(255,255,255,0.5);">
-                    Upload your bank statement in the UPLOAD tab first
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        elif not SC_CARD_MASTER:
-            st.error("Card database not loaded. Check GitHub repo for card_master.json")
-
-        else:
-            df_sc = st.session_state['df']
-
-            # ── Section 1: Wallet Setup ───────────────────────────
-            st.markdown("""
-            <div style="margin:0 40px 8px;">
-                <div style="font-family:DM Mono,monospace;font-size:10px;
-                            color:#00f5a0;letter-spacing:2px;margin-bottom:12px;">
-                    STEP 01 — BUILD YOUR WALLET
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Build card options for multiselect
-            card_options = {
-                f"{c['bank']} — {c['card_name']} "
-                f"({'FREE' if c['annual_fee']==0 else '₹'+str(c['annual_fee'])+'/yr'})": c['card_id']
-                for c in SC_CARD_MASTER
-            }
-
-            with st.container():
-                col_wallet, col_info = st.columns([2, 1])
-
-                with col_wallet:
-                    selected_labels = st.multiselect(
-                        "Select credit cards you own:",
-                        options   = list(card_options.keys()),
-                        default   = [],
-                        help      = "Only select cards you actually have — this determines your cashback analysis",
-                        key       = "sc_wallet_select"
-                    )
-                    user_wallet_sc = [card_options[l] for l in selected_labels]
-
-                with col_info:
-                    if user_wallet_sc:
-                        st.markdown(
-                            f"""<div style="padding:16px;background:rgba(0,245,160,0.06);
-                                border:1px solid rgba(0,245,160,0.15);border-radius:12px;
-                                margin-top:28px;">
-                                <div style="font-family:DM Mono,monospace;font-size:10px;
-                                            color:#00f5a0;letter-spacing:2px;">
-                                    WALLET READY
-                                </div>
-                                <div style="font-size:28px;font-weight:800;color:#00f5a0;">
-                                    {len(user_wallet_sc)} cards
-                                </div>
-                            </div>""",
-                            unsafe_allow_html=True
-                        )
-
-            # ── Run Analysis Button ───────────────────────────────
-            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-            run_sc = st.button("⚡ Analyse My Cashback Potential",
-                                key="sc_run_btn",
-                                disabled=len(user_wallet_sc) == 0)
-
-            if run_sc and user_wallet_sc:
-                with st.spinner("🔍 Calculating best card for every transaction..."):
-                    sc_results  = sc_run_analysis(df_sc, user_wallet_sc)
-                    sc_cat      = sc_category_summary(sc_results)
-                    st.session_state['sc_results'] = sc_results
-                    st.session_state['sc_cat']     = sc_cat
-
-            # ── Section 2: Results ────────────────────────────────
-            if st.session_state.get('sc_results') is not None:
-                sc_results = st.session_state['sc_results']
-                sc_cat     = st.session_state['sc_cat']
-
-                total_spend    = sc_results['AMOUNT'].sum()
-                total_cashback = sc_results['BEST_CASHBACK'].sum()
-                total_extra    = sc_results['EXTRA'].sum()
-                eff_rate       = (total_cashback/total_spend*100) if total_spend > 0 else 0
-
-                # ── Headline metric cards ─────────────────────────
-                st.markdown("<div style='margin:24px 40px 8px;'>", unsafe_allow_html=True)
-                m1, m2, m3, m4 = st.columns(4)
-
-                with m1:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-lbl">TOTAL SPEND</div>
-                        <div class="metric-val">₹{total_spend/1e5:.1f}L</div>
-                    </div>""", unsafe_allow_html=True)
-                with m2:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-lbl">BEST CASHBACK</div>
-                        <div class="metric-val">₹{total_cashback:,.0f}</div>
-                    </div>""", unsafe_allow_html=True)
-                with m3:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-lbl">EXTRA vs 1% CARD</div>
-                        <div class="metric-val" style="-webkit-text-fill-color:#00f5a0">
-                            ₹{total_extra:,.0f}
-                        </div>
-                    </div>""", unsafe_allow_html=True)
-                with m4:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-lbl">EFFECTIVE RATE</div>
-                        <div class="metric-val">{eff_rate:.2f}%</div>
-                    </div>""", unsafe_allow_html=True)
-
-                st.markdown("</div>", unsafe_allow_html=True)
-
-                # ── Category optimisation guide ───────────────────
-                st.markdown("""
-                <div style="margin:24px 40px 8px;">
-                    <div style="font-family:DM Mono,monospace;font-size:10px;
-                                color:#00f5a0;letter-spacing:2px;margin-bottom:12px;">
-                        STEP 02 — CATEGORY OPTIMISATION GUIDE
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                for _, row in sc_cat.iterrows():
-                    pct_bar = min(int(row['avg_rate'] / 6 * 100), 100)
-                    st.markdown(f"""
-                    <div style="margin:0 40px 10px;padding:16px 20px;
-                                background:rgba(255,255,255,0.03);
-                                border:1px solid rgba(255,255,255,0.07);
-                                border-radius:12px;">
-                        <div style="display:flex;justify-content:space-between;
-                                    align-items:center;margin-bottom:8px;">
-                            <div style="font-weight:700;font-size:14px;">
-                                {row['CATEGORY']}
-                            </div>
-                            <div style="font-family:DM Mono,monospace;font-size:11px;
-                                        color:#00f5a0;">
-                                Use → {row['best_card']}
-                            </div>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;
-                                    color:rgba(255,255,255,0.4);font-size:12px;
-                                    margin-bottom:8px;">
-                            <span>₹{row['spend']:,.0f} spent · {row['txns']:,} txns</span>
-                            <span>Earns ₹{row['cashback']:,.0f} · {row['avg_rate']:.1f}% avg</span>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.06);
-                                    border-radius:4px;height:4px;">
-                            <div style="background:linear-gradient(90deg,#00f5a0,#00d4ff);
-                                        width:{pct_bar}%;height:4px;border-radius:4px;">
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                # ── Top transactions table ────────────────────────
-                st.markdown("""
-                <div style="margin:24px 40px 8px;">
-                    <div style="font-family:DM Mono,monospace;font-size:10px;
-                                color:#00f5a0;letter-spacing:2px;margin-bottom:12px;">
-                        STEP 03 — TOP 20 TRANSACTIONS
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                top20 = (sc_results
-                         .nlargest(20, 'BEST_CASHBACK')
-                         [['DATE','DESCRIPTION','CATEGORY',
-                           'AMOUNT','BEST_CARD','BEST_RATE','BEST_CASHBACK']]
-                         .rename(columns={
-                             'BEST_CARD'    : 'Use This Card',
-                             'BEST_RATE'    : 'Rate %',
-                             'BEST_CASHBACK': 'Earns ₹'
-                         })
-                        )
-                top20['AMOUNT']  = top20['AMOUNT'].apply(lambda x: f"₹{x:,.0f}")
-                top20['Earns ₹'] = top20['Earns ₹'].apply(lambda x: f"₹{x:,.0f}")
-                top20['Rate %']  = top20['Rate %'].apply(lambda x: f"{x:.1f}%")
-
-                st.dataframe(
-                    top20,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "DESCRIPTION": st.column_config.TextColumn(width="large"),
-                        "Use This Card": st.column_config.TextColumn(width="medium"),
-                    }
-                )
-
+    st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + PROPHET + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
