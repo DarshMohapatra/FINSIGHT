@@ -26,6 +26,10 @@ if "uploaded_file_name" not in st.session_state:
     st.session_state.uploaded_file_name = None
 if "df_processed" not in st.session_state:
     st.session_state.df_processed = None
+if "forecast_cache" not in st.session_state:
+    st.session_state.forecast_cache = None
+if "forecast_df_id" not in st.session_state:
+    st.session_state.forecast_df_id = None
 
 
 st.markdown("""
@@ -663,6 +667,12 @@ else:
                                     raise
                             st.session_state.user_df = df
                             st.session_state.analysis_done = True
+                            # Invalidate forecast cache so Prophet retrains on new data
+                            st.session_state.forecast_cache = None
+                            st.session_state.forecast_df_id = None
+                            # Invalidate SmartCash results from previous file
+                            st.session_state.pop("sc_results", None)
+                            st.session_state.pop("sc_cat", None)
                             st.success("✅ Analysis complete! Found " + str(len(df)) + " transactions.")
                         except Exception as e:
                             st.error("❌ " + str(e))
@@ -732,31 +742,46 @@ else:
         else:
             df = st.session_state.user_df
             st.markdown('<div style="padding:28px 0 0;font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:8px;">6-MONTH EXPENSE FORECAST</div>', unsafe_allow_html=True)
-            with st.spinner("Training forecast model..."):
+            # Use a fingerprint of the current data to detect when user uploads new file
+            _df_id = (len(df), df["WITHDRAWAL AMT"].sum(), df["DATE"].min(), df["DATE"].max())
+            _need_retrain = (st.session_state.forecast_cache is None
+                            or st.session_state.forecast_df_id != _df_id)
+            if _need_retrain:
+                with st.spinner("Training forecast model on your data..."):
+                    try:
+                        from prophet import Prophet
+                        # Filter out anomalous transactions before forecasting
+                        df_fc = df[df["IS_ANOMALY"] == 0] if "IS_ANOMALY" in df.columns else df
+                        ms = df_fc.groupby(df_fc["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
+                        ms.columns = ["ds", "y"]
+                        ms["ds"] = ms["ds"].dt.to_timestamp()
+                        # Remove outlier months (beyond 2 std devs)
+                        mean_y, std_y = ms["y"].mean(), ms["y"].std()
+                        ms = ms[ms["y"].between(mean_y - 2*std_y, mean_y + 2*std_y)]
+                        ms = ms[ms["y"] > 0].reset_index(drop=True)
+                        m = Prophet(
+                            yearly_seasonality=True,
+                            weekly_seasonality=False,
+                            daily_seasonality=False,
+                            changepoint_prior_scale=0.1,
+                            seasonality_mode="multiplicative"
+                        )
+                        m.fit(ms)
+                        future = m.make_future_dataframe(periods=6, freq="MS")
+                        fc = m.predict(future)
+                        fc["yhat"]       = fc["yhat"].clip(lower=0)
+                        fc["yhat_lower"] = fc["yhat_lower"].clip(lower=0)
+                        fc["yhat_upper"] = fc["yhat_upper"].clip(lower=0)
+                        st.session_state.forecast_cache = {"ms": ms, "fc": fc}
+                        st.session_state.forecast_df_id = _df_id
+                    except Exception as e:
+                        st.error("Forecast error: " + str(e))
+                        st.info("Need at least 6 months of data for reliable forecasting.")
+                        st.session_state.forecast_cache = None
+            if st.session_state.forecast_cache is not None:
+                ms = st.session_state.forecast_cache["ms"]
+                fc = st.session_state.forecast_cache["fc"]
                 try:
-                    from prophet import Prophet
-                    # Filter out anomalous transactions before forecasting
-                    df_fc = df[df["IS_ANOMALY"] == 0] if "IS_ANOMALY" in df.columns else df
-                    ms = df_fc.groupby(df_fc["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
-                    ms.columns = ["ds", "y"]
-                    ms["ds"] = ms["ds"].dt.to_timestamp()
-                    # Remove outlier months (beyond 2 std devs)
-                    mean_y, std_y = ms["y"].mean(), ms["y"].std()
-                    ms = ms[ms["y"].between(mean_y - 2*std_y, mean_y + 2*std_y)]
-                    ms = ms[ms["y"] > 0].reset_index(drop=True)
-                    m = Prophet(
-                        yearly_seasonality=True,
-                        weekly_seasonality=False,
-                        daily_seasonality=False,
-                        changepoint_prior_scale=0.1,
-                        seasonality_mode="multiplicative"
-                    )
-                    m.fit(ms)
-                    future = m.make_future_dataframe(periods=6, freq="MS")
-                    fc = m.predict(future)
-                    fc["yhat"]       = fc["yhat"].clip(lower=0)
-                    fc["yhat_lower"] = fc["yhat_lower"].clip(lower=0)
-                    fc["yhat_upper"] = fc["yhat_upper"].clip(lower=0)
                     fig2, ax2 = dark_fig(2, 1, (14, 10))
                     ax2[0].plot(ms["ds"], ms["y"], color="#00c8e0", linewidth=2.5, label="Actual")
                     ax2[0].plot(fc["ds"], fc["yhat"], color="#00f0a0", linewidth=2, linestyle="--", label="Forecast")
@@ -842,20 +867,56 @@ else:
             card_opts = {c["bank"]+" — "+c["card_name"]+" ("+("FREE" if c["annual_fee"]==0 else "₹"+str(c["annual_fee"])+"/yr")+")": c["card_id"] for c in SC_CARD_MASTER}
             import re as _re
             _wdr = df_sc[df_sc["WITHDRAWAL AMT"]>0]["TRANSACTION DETAILS"].astype(str).str.upper()
+            _all_txn_text = " ".join(_wdr.tolist())
             _auto = []
             _all_keys = list(card_opts.keys())
+            # Broad patterns: match bank names in any context (UPI handles, NEFT, bill pay, etc.)
             _bank_patterns = [
-                (r"HDFC.*(CREDIT|CC|CARD|CRD)",     "HDFC Bank"),
-                (r"AXIS.*(CREDIT|CC|CARD|CRD)",     "Axis Bank"),
-                (r"ICICI.*(CREDIT|CC|CARD|CRD)",    "ICICI Bank"),
-                (r"SBI.*(CREDIT|CC|CARD)|SBICRD",   "SBI Card"),
-                (r"KOTAK.*(CREDIT|CC|CARD|CRD)",    "Kotak Mahindra Bank"),
-                (r"IDFC.*(CREDIT|CC|CARD|CRD)",     "IDFC FIRST Bank"),
-                (r"MASTERCARD.*(BILL|PAYMENT|PAY)", "HDFC Bank"),
-                (r"AMEX|AMERICAN EXPRESS",          "American Express"),
+                # HDFC — matches HDFCBK, HDFC BANK, HDFC CC, @hdfc, HDFC CREDIT, etc.
+                (r"HDFC|HDFCBK|@HDFC",              "HDFC Bank"),
+                # Axis — matches AXIS BANK, AXISB, @axl, AXIS CC, etc.
+                (r"AXIS\s*BANK|AXISB|@AXIS|@AXL|AXIS.*(CC|CARD|CREDIT|CRD)", "Axis Bank"),
+                # ICICI — matches ICICI, ICICIB, @icici, ICICI CC, etc.
+                (r"ICICI|ICICIB|@ICICI",             "ICICI Bank"),
+                # SBI — matches SBICARD, SBI CARD, SBICRD, SBI CC, @SBI
+                (r"SBI\s*CARD|SBICRD|SBI.*(CC|CREDIT|CRD)|@SBI", "SBI Card"),
+                # Kotak — matches KOTAK, @kotak, KOTAK CC, etc.
+                (r"KOTAK|@KOTAK",                    "Kotak Mahindra Bank"),
+                # IDFC — matches IDFC, IDFCFIRST, @IDFCFIRST, etc.
+                (r"IDFC|IDFCFIRST|@IDFC",           "IDFC FIRST Bank"),
+                # Yes Bank
+                (r"YES\s*BANK|YESBK|@YBL|@YESBANK", "Yes Bank"),
+                # RBL Bank
+                (r"RBL\s*BANK|RBLBANK|@RBL",        "RBL Bank"),
+                # Amex
+                (r"AMEX|AMERICAN\s*EXPRESS|AMERICANEXPRESS", "American Express"),
+                # Generic credit card payment keywords — try to extract bank from context
+                (r"CRED\b.*HDFC|HDFC.*CRED\b",      "HDFC Bank"),
+                (r"CRED\b.*AXIS|AXIS.*CRED\b",      "Axis Bank"),
+                (r"CRED\b.*ICICI|ICICI.*CRED\b",    "ICICI Bank"),
+                (r"CRED\b.*SBI|SBI.*CRED\b",        "SBI Card"),
             ]
             for _pat, _bank in _bank_patterns:
-                if _wdr.str.contains(_pat, regex=True, na=False).any():
+                if _re.search(_pat, _all_txn_text):
+                    for _k in _all_keys:
+                        if _k.startswith(_bank) and _k not in _auto:
+                            _auto.append(_k)
+            # Also check UPI VPA handles (e.g., @hdfcbank, @icici, @sbi, @axisbank)
+            _vpa_bank_map = {
+                "hdfcbank": "HDFC Bank", "hdfc": "HDFC Bank",
+                "icici": "ICICI Bank", "icicibank": "ICICI Bank",
+                "axisbank": "Axis Bank", "axis": "Axis Bank", "axl": "Axis Bank",
+                "sbi": "SBI Card", "sbicard": "SBI Card",
+                "kotak": "Kotak Mahindra Bank", "kotakbank": "Kotak Mahindra Bank",
+                "idfcfirst": "IDFC FIRST Bank", "idfc": "IDFC FIRST Bank",
+                "yesbank": "Yes Bank", "ybl": "Yes Bank",
+                "rbl": "RBL Bank", "rblbank": "RBL Bank",
+            }
+            _vpa_matches = _re.findall(r"@([A-Z0-9]+)", _all_txn_text)
+            for _vpa in _vpa_matches:
+                _vpa_lower = _vpa.lower()
+                _bank = _vpa_bank_map.get(_vpa_lower)
+                if _bank:
                     for _k in _all_keys:
                         if _k.startswith(_bank) and _k not in _auto:
                             _auto.append(_k)
