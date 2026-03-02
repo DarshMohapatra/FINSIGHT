@@ -63,256 +63,797 @@ for k, v in {"page": "landing", "user_df": None, "chat_history": [], "analysis_d
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# ── SmartCash: Load card databases from GitHub ────────────────────
-import urllib.request as _urllib
+# ── SmartCash globals ──────────────────────────────────────
+import json as _scj, urllib.request as _scu
 
-def _load_json_from_github(filename):
-    """Load a JSON file directly from the public GitHub repo."""
-    try:
-        base_url = "https://raw.githubusercontent.com/DarshMohapatra/FINSIGHT/main/"
-        with _urllib.urlopen(base_url + filename, timeout=5) as resp:
-            return json.load(resp)
-    except Exception:
-        return []
-
-@st.cache_data(ttl=3600)   # cache for 1 hour — avoid re-fetching on every rerun
+@st.cache_data(ttl=3600)
 def load_card_databases():
-    card_master  = _load_json_from_github("card_master.json")
-    card_rewards = _load_json_from_github("card_rewards.json")
-    return card_master, card_rewards
+    _b = "https://raw.githubusercontent.com/DarshMohapatra/FINSIGHT/main/"
+    def _g(f):
+        try:
+            with _scu.urlopen(_b+f, timeout=5) as resp: return _scj.load(resp)
+        except Exception: return []
+    return _g("card_master.json"), _g("card_rewards.json")
 
 SC_CARD_MASTER, SC_CARD_REWARDS = load_card_databases()
-SC_REWARDS_LOOKUP  = {r['card_id']: r['rates']    for r in SC_CARD_REWARDS}
-SC_CARD_LOOKUP     = {c['card_id']: c             for c in SC_CARD_MASTER}
-SC_CARD_NAME       = {c['card_id']: f"{c['bank']} {c['card_name']}"
-                      for c in SC_CARD_MASTER}
-SC_CATEGORY_MAP    = {
-    "Food & Dining" : "Food & Dining",
-    "Grocery"       : "Grocery",
-    "Shopping"      : "Shopping",
-    "Travel"        : "Travel",
-    "Fuel"          : "Fuel",
-    "Healthcare"    : "Healthcare",
-    "Entertainment" : "Entertainment",
-    "Utility"       : "Utility",
-    "Salary"        : "Other",
-    "Other"         : "Other",
-}
+SC_RWD  = {r["card_id"]: r["rates"] for r in SC_CARD_REWARDS}
+SC_NAME = {c["card_id"]: c["bank"]+" "+c["card_name"] for c in SC_CARD_MASTER}
+SC_CMAP = {
+    "Food & Dining":"Food & Dining", "Grocery":"Grocery",
+    "Shopping":"Shopping", "Travel":"Travel", "Fuel":"Fuel",
+    "Healthcare":"Healthcare", "Entertainment":"Entertainment",
+    "Utility":"Utility", "Salary":"Other", "Other":"Other"}
 
-    # ════════════════════════════════════════════════════════════
-    # 💳 SMARTCASH TAB
-    # ════════════════════════════════════════════════════════════
-    with tab5:
-        st.markdown("""
-        <div style="padding:40px 40px 0;">
-            <div style="font-family:DM Mono,monospace;font-size:10px;
-                        color:#00f5a0;letter-spacing:3px;margin-bottom:8px;">
-                FEATURE 01 — SMARTCASH
-            </div>
-            <div style="font-size:28px;font-weight:800;margin-bottom:8px;">
-                💳 Card Reward Maximiser
-            </div>
-            <div style="color:rgba(255,255,255,0.4);font-size:14px;
-                        margin-bottom:32px;">
-                Find the best card in your wallet for every rupee you spend.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+def sc_best(amount, category, wallet):
+    cat = SC_CMAP.get(category, "Other")
+    bi, br, bc = "NONE", 0.0, 0.0
+    for cid in wallet:
+        rate = SC_RWD.get(cid, {}).get(cat, SC_RWD.get(cid, {}).get("Other", 0))
+        cash = round(amount * rate / 100, 2)
+        if cash > bc: bi, br, bc = cid, rate, cash
+    return {"name": SC_NAME.get(bi, bi), "rate": br,
+            "cash": bc, "base": round(amount/100, 2)}
 
-        if st.session_state.get('df') is None:
-            st.markdown("""
-            <div style="margin:40px;padding:32px;background:rgba(255,255,255,0.03);
-                        border:1px solid rgba(255,255,255,0.08);border-radius:16px;
-                        text-align:center;">
-                <div style="font-size:40px;margin-bottom:16px;">📤</div>
-                <div style="color:rgba(255,255,255,0.5);">
-                    Upload your bank statement in the UPLOAD tab first
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+def sc_analyse(df, wallet):
+    sp = df[(df["WITHDRAWAL AMT"]>0) & df["CATEGORY"].notna()
+            & (df["CATEGORY"]!="Salary")].copy()
+    rows = []
+    for _, row in sp.iterrows():
+        res = sc_best(row["WITHDRAWAL AMT"], row["CATEGORY"], wallet)
+        rows.append({"DATE": row["DATE"],
+                     "DESCRIPTION": row["TRANSACTION DETAILS"],
+                     "CATEGORY": row["CATEGORY"],
+                     "AMOUNT": row["WITHDRAWAL AMT"],
+                     "BEST_CARD": res["name"],
+                     "BEST_RATE": res["rate"],
+                     "BEST_CASHBACK": res["cash"],
+                     "BASELINE": res["base"],
+                     "EXTRA": round(res["cash"]-res["base"], 2)})
+    return pd.DataFrame(rows)
 
-        elif not SC_CARD_MASTER:
-            st.error("Card database not loaded. Check GitHub repo for card_master.json")
+def sc_summary(rdf):
+    return (rdf.groupby("CATEGORY")
+            .agg(spend=("AMOUNT","sum"), cashback=("BEST_CASHBACK","sum"),
+                 txns=("AMOUNT","count"),
+                 best_card=("BEST_CARD", lambda x: x.mode()[0]),
+                 avg_rate=("BEST_RATE","mean"))
+            .assign(extra=lambda x: x["cashback"]-x["cashback"]/x["avg_rate"]
+                    if False else x["cashback"]-x["spend"]/100)
+            .sort_values("spend", ascending=False).reset_index())
+
+
+
+def categorize(desc):
+    d = str(desc).upper()
+    if any(k in d for k in ["SALARY", "SAL ", "PAYROLL", "GIBL"]): return "Salary"
+    elif any(k in d for k in ["TRF FROM", "TRANSFER IN", "IMPS/CR", "NEFT/CR"]): return "Transfer In"
+    elif any(k in d for k in ["TRF TO", "TRANSFER OUT"]): return "Transfer Out"
+    elif any(k in d for k in ["NEFT", "RTGS", "IMPS"]): return "Online Payment"
+    elif any(k in d for k in ["CASHDEP", "CASH DEP", "CASH DEPOSIT"]): return "Cash Deposit"
+    elif any(k in d for k in ["ATM", "CDM", "CASHWDL", "CASH WDL"]): return "ATM/Cash Withdrawal"
+    elif "UPI" in d: return "UPI Payment"
+    elif any(k in d for k in ["CHQ", "CHEQUE", "CHECK"]): return "Cheque"
+    elif any(k in d for k in ["EMI", "LOAN", "MORTGAGE"]): return "Loan/EMI"
+    elif any(k in d for k in ["TAX", "GST", "GOVT", "TDS"]): return "Tax/Government"
+    else: return "Other"
+
+
+def normalize_columns(df):
+    df.columns = df.columns.str.strip()
+
+    # ── Step 1: case-insensitive direct rename map ─────────────────
+    direct_map = {
+        # TRANSACTION DETAILS aliases
+        "CATEGORY": "TRANSACTION DETAILS", "TYPE": "TRANSACTION DETAILS",
+        "NARRATION": "TRANSACTION DETAILS", "DESCRIPTION": "TRANSACTION DETAILS",
+        "PARTICULARS": "TRANSACTION DETAILS", "DETAILS": "TRANSACTION DETAILS",
+        "REMARKS": "TRANSACTION DETAILS", "CHEQUENO": "TRANSACTION DETAILS",
+        "CHEQUE NO": "TRANSACTION DETAILS", "MODE": "TRANSACTION DETAILS",
+        # DATE aliases
+        "TIMESTAMP": "DATE", "TRANSACTION DATE": "DATE", "TXN DATE": "DATE",
+        "TRANS DATE": "DATE", "VALUE DATE": "DATE", "POSTING DATE": "DATE",
+        "ENTRY DATE": "DATE",
+        # WITHDRAWAL aliases
+        "DEBIT": "WITHDRAWAL AMT", "DEBIT AMT": "WITHDRAWAL AMT",
+        "DR": "WITHDRAWAL AMT", "WITHDRAWALS": "WITHDRAWAL AMT",
+        "AMOUNT DEBITED": "WITHDRAWAL AMT", "WD": "WITHDRAWAL AMT",
+        # DEPOSIT aliases
+        "CREDIT": "DEPOSIT AMT", "CREDIT AMT": "DEPOSIT AMT",
+        "CR": "DEPOSIT AMT", "DEPOSITS": "DEPOSIT AMT",
+        "AMOUNT CREDITED": "DEPOSIT AMT",
+        # BALANCE aliases
+        "BALANCE": "BALANCE AMT", "CLOSING BALANCE": "BALANCE AMT",
+        "RUNNING BALANCE": "BALANCE AMT", "BAL": "BALANCE AMT",
+    }
+
+    # Apply case-insensitive: compare upper-stripped column names
+    new_cols = {}
+    already_mapped = set()
+    for col in df.columns:
+        key = col.upper().strip()
+        # Only map if target not already present in df and not already claimed
+        if key in direct_map:
+            tgt = direct_map[key]
+            if tgt not in df.columns and tgt not in already_mapped:
+                new_cols[col] = tgt
+                already_mapped.add(tgt)
+    df = df.rename(columns=new_cols)
+
+    # ── Step 2: fuzzy substring match for remaining columns ─────────
+    cols_upper = {c.upper().strip(): c for c in df.columns}
+    date_c   = ["DATE", "TRANSACTION DATE", "TXN DATE", "VALUE DATE", "TIMESTAMP", "POSTING DATE"]
+    detail_c = ["TRANSACTION DETAILS", "PARTICULARS", "NARRATION", "DESCRIPTION",
+                "REMARKS", "DETAILS", "TYPE", "CATEGORY", "MODE", "CHEQUE", "TRANS DETAILS"]
+    wd_c     = ["WITHDRAWAL AMT", "WITHDRAWALS", "WITHDRAWAL", "DEBIT", "DEBIT AMT", "DR", "AMOUNT DEBITED", "WD AMT"]
+    dep_c    = ["DEPOSIT AMT", "DEPOSITS", "DEPOSIT", "CREDIT", "CREDIT AMT", "CR", "AMOUNT CREDITED"]
+    bal_c    = ["BALANCE AMT", "BALANCE", "CLOSING BALANCE", "RUNNING BALANCE", "BAL"]
+
+    def find(cands):
+        for c in cands:
+            if c in cols_upper: return cols_upper[c]
+        for c in cands:
+            for cu, co in cols_upper.items():
+                if c in cu or cu in c: return co
+        return None
+
+    col_map = {}
+    for tgt, cands in [("DATE", date_c), ("TRANSACTION DETAILS", detail_c),
+                       ("WITHDRAWAL AMT", wd_c), ("DEPOSIT AMT", dep_c), ("BALANCE AMT", bal_c)]:
+        f = find(cands)
+        if f and tgt not in df.columns:
+            col_map[f] = tgt
+    df = df.rename(columns=col_map)
+
+    # ── Step 3: last-resort fallback for TRANSACTION DETAILS ────────
+    # If still missing, use whichever unmapped string column has
+    # the most unique non-numeric values — almost certainly the narration col
+    if "TRANSACTION DETAILS" not in df.columns:
+        already_used = {"DATE", "WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"}
+        candidate_cols = [c for c in df.columns if c not in already_used]
+        best_col, best_score = None, 0
+        for col in candidate_cols:
+            try:
+                # Score = number of unique non-numeric values (narrations are unique text)
+                vals = df[col].dropna().astype(str)
+                non_numeric = vals[~vals.str.match(r"^[\d\.,\s\-]+$")]
+                score = non_numeric.nunique()
+                if score > best_score:
+                    best_score = score
+                    best_col = col
+            except Exception:
+                pass
+        if best_col:
+            df = df.rename(columns={best_col: "TRANSACTION DETAILS"})
+
+    # ── Final check ──────────────────────────────────────────────────
+    # TRANSACTION DETAILS is optional — create empty if missing
+    # (pdfplumber sometimes can't extract narration column from PDFs)
+    if "TRANSACTION DETAILS" not in df.columns:
+        # Last resort: use any remaining unmapped string column
+        already_used = {"DATE", "WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"}
+        candidates = [c for c in df.columns if c not in already_used]
+        best_col, best_score = None, 0
+        for col in candidates:
+            try:
+                vals = df[col].dropna().astype(str)
+                score = vals[~vals.str.match(r"^[\d.,\s\-]+$")].nunique()
+                if score > best_score:
+                    best_score, best_col = score, col
+            except Exception:
+                pass
+        if best_col and best_score > 0:
+            df = df.rename(columns={best_col: "TRANSACTION DETAILS"})
+        else:
+            # Create empty column — categorize() handles "" → "Other"
+            df["TRANSACTION DETAILS"] = ""
+
+    # Only DATE and WITHDRAWAL AMT are truly required
+    missing = [c for c in ["DATE", "WITHDRAWAL AMT"] if c not in df.columns]
+    if missing:
+        raise ValueError(
+            "Cannot find required columns: " + str(missing) +
+            "\nYour file has: " + str(list(df.columns)) +
+            "\nPlease rename to: DATE, TRANSACTION DETAILS, WITHDRAWAL AMT, DEPOSIT AMT, BALANCE AMT"
+        )
+    for col in ["DEPOSIT AMT", "BALANCE AMT"]:
+        if col not in df.columns:
+            df[col] = 0
+    return df
+
+def _looks_like_date_header(val):
+    """True if a string looks like a date column header."""
+    if not isinstance(val, str):
+        return False
+    v = val.strip().lower()
+    return any(k in v for k in [
+        "date", "txn date", "transaction date", "value date",
+        "posting date", "entry date", "timestamp", "dt"
+    ])
+
+def _looks_like_date_value(val):
+    """True if a string looks like an actual date value."""
+    if not isinstance(val, str):
+        return False
+    patterns = [
+        r"\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4}",
+        r"\d{1,2}[\-/ ](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\-/ ]\d{2,4}",
+        r"\d{4}[\-/]\d{1,2}[\-/]\d{1,2}",
+    ]
+    return any(re.search(p, val.strip(), re.IGNORECASE) for p in patterns)
+
+def extract_df_from_pdf(pdf_path, password=None):
+    """
+    Universal bank statement PDF parser.
+    Supports:
+      - 2-col format: DATE NARRATION AMOUNT BALANCE         (ICICI, HDFC, Axis, Kotak)
+      - 3-col format: DATE NARRATION DEBIT CREDIT BALANCE   (SBI, PNB, Canara)
+    Date formats: DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, DD-Mon-YYYY, DD Mon YYYY, DD/MM/YY
+    Deposit vs withdrawal: balance delta (100% accurate), keyword fallback if ambiguous.
+    """
+    import pdfplumber
+    import pandas as pd
+    import re as _re
+    from datetime import datetime
+
+    DATE_FORMATS = [
+        (_re.compile(r"^\d{2}-\d{2}-\d{4}"),        "%d-%m-%Y"),
+        (_re.compile(r"^\d{2}/\d{2}/\d{4}"),        "%d/%m/%Y"),
+        (_re.compile(r"^\d{4}-\d{2}-\d{2}"),        "%Y-%m-%d"),
+        (_re.compile(r"^\d{4}/\d{2}/\d{2}"),        "%Y/%m/%d"),
+        (_re.compile(r"^\d{2}-[A-Za-z]{3}-\d{4}"),  "%d-%b-%Y"),
+        (_re.compile(r"^\d{2}\s[A-Za-z]{3}\s\d{4}"),"%d %b %Y"),
+        (_re.compile(r"^\d{2}/\d{2}/\d{2}"),        "%d/%m/%y"),
+        (_re.compile(r"^\d{2}-\d{2}-\d{2}"),        "%d-%m-%y"),
+    ]
+    AMT_PAT = _re.compile(r"[\d,]+\.\d{2}")
+
+    def parse_date(s):
+        for pat, fmt in DATE_FORMATS:
+            m = pat.match(s)
+            if m:
+                token = m.group(0)
+                try:
+                    datetime.strptime(token, fmt)
+                    return token, fmt
+                except ValueError:
+                    continue
+        return None
+
+    def to_float(s):
+        try:
+            return float(str(s).replace(",", "").strip())
+        except Exception:
+            return None
+
+    open_kwargs = {"password": password} if password else {}
+    try:
+        pdf_file = pdfplumber.open(pdf_path, **open_kwargs)
+        pdf_file.close()
+    except Exception as e:
+        err = str(e).lower()
+        if any(k in err for k in ["password", "decrypt", "encrypt", "incorrect"]):
+            raise ValueError(
+                "❌ Incorrect PDF password. "
+                "Try your PAN number, date of birth (DDMMYYYY), or account number."
+            )
+        raise
+
+    # ── Detect 3-column format from table header ──────────────────────────────
+    three_col_mode = False
+    with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
+        for page in pdf.pages[:3]:
+            for tbl in (page.extract_tables() or []):
+                if tbl:
+                    header = [str(c or "").strip().upper() for c in tbl[0]]
+                    has_debit  = any("DEBIT" in h or h == "DR" or "WITHDRAWAL" in h for h in header)
+                    has_credit = any("CREDIT" in h or h == "CR" or "DEPOSIT" in h for h in header)
+                    if has_debit and has_credit:
+                        three_col_mode = True
+                        break
+            if three_col_mode:
+                break
+
+    # ── Parse text lines ──────────────────────────────────────────────────────
+    raw_rows = []
+    with pdfplumber.open(pdf_path, **open_kwargs) as pdf:
+        for page in pdf.pages:
+            try:
+                text = page.extract_text(x_tolerance=2, y_tolerance=2)
+            except Exception:
+                continue
+            if not text:
+                continue
+            for raw in text.splitlines():
+                line = raw.strip()
+                if not line:
+                    continue
+                result = parse_date(line)
+                if not result:
+                    continue
+                date_token, date_fmt = result
+                rest    = line[len(date_token):].strip()
+                amounts = AMT_PAT.findall(rest)
+                if len(amounts) < 2:
+                    continue   # 0 = no amounts, 1 = B/F opening balance — skip both
+                first_pos = rest.index(amounts[0])
+                narration = rest[:first_pos].strip()
+                raw_rows.append((date_token, date_fmt, narration, amounts))
+
+    if not raw_rows:
+        raise ValueError(
+            "No transactions found in this PDF. "
+            "It may be image-only (scanned). Try a CSV/Excel export."
+        )
+
+    # ── Assign deposit / withdrawal ───────────────────────────────────────────
+    CREDIT_KWS = ["REFUND", "SALARY", "INTEREST", "CASHBACK", "REVERSAL",
+                  "REWARD", "DIVIDEND", "/CR", " CR ", "NEFT CR", "IMPS CR", "RTGS CR"]
+
+    rows     = []
+    prev_bal = None
+
+    for date_token, date_fmt, narration, amounts in raw_rows:
+        deposit    = 0.0
+        withdrawal = 0.0
+        balance    = to_float(amounts[-1]) or 0.0
+
+        # 3-col mode AND enough amounts present
+        if three_col_mode and len(amounts) >= 3:
+            debit_cand  = to_float(amounts[-3])
+            credit_cand = to_float(amounts[-2])
+            bal_cand    = balance
+            tol = 2.0
+            if prev_bal is not None:
+                if debit_cand and abs(round(prev_bal - debit_cand, 2) - round(bal_cand, 2)) <= tol:
+                    withdrawal = debit_cand
+                elif credit_cand and abs(round(prev_bal + credit_cand, 2) - round(bal_cand, 2)) <= tol:
+                    deposit = credit_cand
+                else:
+                    withdrawal = debit_cand  or 0.0
+                    deposit    = credit_cand or 0.0
+            else:
+                withdrawal = debit_cand  or 0.0
+                deposit    = credit_cand or 0.0
 
         else:
-            df_sc = st.session_state['df']
+            # 2-col mode (or 3-col with only 2 amounts on this line)
+            amt_val = to_float(amounts[-2])
+            tol = 2.0
+            if prev_bal is not None and amt_val is not None:
+                exp_wd  = round(prev_bal - amt_val, 2)
+                exp_dep = round(prev_bal + amt_val, 2)
+                bal_r   = round(balance, 2)
+                if abs(bal_r - exp_wd) <= tol:
+                    withdrawal = amt_val
+                elif abs(bal_r - exp_dep) <= tol:
+                    deposit = amt_val
+                else:
+                    # Ambiguous — keyword fallback
+                    if any(k in narration.upper() for k in CREDIT_KWS):
+                        deposit = amt_val
+                    else:
+                        withdrawal = amt_val
+            else:
+                if any(k in narration.upper() for k in CREDIT_KWS):
+                    deposit = to_float(amounts[-2]) or 0.0
+                else:
+                    withdrawal = to_float(amounts[-2]) or 0.0
 
-            # ── Section 1: Wallet Setup ───────────────────────────
-            st.markdown("""
-            <div style="margin:0 40px 8px;">
-                <div style="font-family:DM Mono,monospace;font-size:10px;
-                            color:#00f5a0;letter-spacing:2px;margin-bottom:12px;">
-                    STEP 01 — BUILD YOUR WALLET
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+        prev_bal = balance
+        rows.append({
+            "DATE":                date_token,
+            "TRANSACTION DETAILS": narration,
+            "DEPOSIT AMT":         round(deposit,    2),
+            "WITHDRAWAL AMT":      round(withdrawal, 2),
+            "BALANCE AMT":         round(balance,    2),
+        })
 
-            # Build card options for multiselect
-            card_options = {
-                f"{c['bank']} — {c['card_name']} "
-                f"({'FREE' if c['annual_fee']==0 else '₹'+str(c['annual_fee'])+'/yr'})": c['card_id']
-                for c in SC_CARD_MASTER
-            }
+    df = pd.DataFrame(rows)
 
-            with st.container():
-                col_wallet, col_info = st.columns([2, 1])
+    # Parse dates — try each format, use whichever matches >80% of rows
+    for _, fmt in DATE_FORMATS:
+        converted = pd.to_datetime(df["DATE"], format=fmt, errors="coerce")
+        if converted.notna().sum() > len(df) * 0.8:
+            df["DATE"] = converted
+            break
+    else:
+        df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
 
-                with col_wallet:
-                    selected_labels = st.multiselect(
-                        "Select credit cards you own:",
-                        options   = list(card_options.keys()),
-                        default   = [],
-                        help      = "Only select cards you actually have — this determines your cashback analysis",
-                        key       = "sc_wallet_select"
-                    )
-                    user_wallet_sc = [card_options[l] for l in selected_labels]
+    df = df.dropna(subset=["DATE"])
+    df = df.sort_values("DATE").reset_index(drop=True)
+    return df
 
-                with col_info:
-                    if user_wallet_sc:
-                        st.markdown(
-                            f"""<div style="padding:16px;background:rgba(0,245,160,0.06);
-                                border:1px solid rgba(0,245,160,0.15);border-radius:12px;
-                                margin-top:28px;">
-                                <div style="font-family:DM Mono,monospace;font-size:10px;
-                                            color:#00f5a0;letter-spacing:2px;">
-                                    WALLET READY
-                                </div>
-                                <div style="font-size:28px;font-weight:800;color:#00f5a0;">
-                                    {len(user_wallet_sc)} cards
-                                </div>
-                            </div>""",
-                            unsafe_allow_html=True
-                        )
+def process_file(uploaded, pdf_password=""):
+    # ── Parse file into raw DataFrame ─────────────────────────────
+    if uploaded.name.lower().endswith(".pdf"):
+        df = extract_df_from_pdf(uploaded, pdf_password)
+        try:
+            df = normalize_columns(df)
+        except Exception:
+            pass
+    elif uploaded.name.lower().endswith(".csv"):
+        df = pd.read_csv(uploaded)
+        df = normalize_columns(df)
+    else:
+        df = pd.read_excel(uploaded)
+        df = normalize_columns(df)
 
-            # ── Run Analysis Button ───────────────────────────────
-            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-            run_sc = st.button("⚡ Analyse My Cashback Potential",
-                                key="sc_run_btn",
-                                disabled=len(user_wallet_sc) == 0)
+    # ── Parse dates ───────────────────────────────────────────────
+    df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
 
-            if run_sc and user_wallet_sc:
-                with st.spinner("🔍 Calculating best card for every transaction..."):
-                    sc_results  = sc_run_analysis(df_sc, user_wallet_sc)
-                    sc_cat      = sc_category_summary(sc_results)
-                    st.session_state['sc_results'] = sc_results
-                    st.session_state['sc_cat']     = sc_cat
+    # ── Clean and convert amounts ─────────────────────────────────
+    # Bank PDFs use "1,199.00" — commas must be stripped or
+    # pd.to_numeric returns NaN, everything becomes 0, pipeline crashes
+    for col in ["WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"]:
+        df[col] = (df[col].astype(str)
+                          .str.replace(",", "", regex=False)
+                          .str.replace("Rs.", "", regex=False)
+                          .str.replace("Rs", "", regex=False)
+                          .str.strip())
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-            # ── Section 2: Results ────────────────────────────────
-            if st.session_state.get('sc_results') is not None:
-                sc_results = st.session_state['sc_results']
-                sc_cat     = st.session_state['sc_cat']
+    # ── Filter: keep only rows with actual transactions ───────────
+    df = df[(df["WITHDRAWAL AMT"] > 0) | (df["DEPOSIT AMT"] > 0)].copy()
+    df.dropna(subset=["DATE"], inplace=True)
 
-                total_spend    = sc_results['AMOUNT'].sum()
-                total_cashback = sc_results['BEST_CASHBACK'].sum()
-                total_extra    = sc_results['EXTRA'].sum()
-                eff_rate       = (total_cashback/total_spend*100) if total_spend > 0 else 0
+    if len(df) == 0:
+        raise ValueError(
+            "No transactions found after filtering. "
+            "Check that your WITHDRAWAL AMT and DEPOSIT AMT columns have numeric values."
+        )
 
-                # ── Headline metric cards ─────────────────────────
-                st.markdown("<div style='margin:24px 40px 8px;'>", unsafe_allow_html=True)
-                m1, m2, m3, m4 = st.columns(4)
+    # ── NLP Categorization ────────────────────────────────────────
+    df["CATEGORY"] = df["TRANSACTION DETAILS"].apply(categorize)
 
-                with m1:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-lbl">TOTAL SPEND</div>
-                        <div class="metric-val">₹{total_spend/1e5:.1f}L</div>
-                    </div>""", unsafe_allow_html=True)
-                with m2:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-lbl">BEST CASHBACK</div>
-                        <div class="metric-val">₹{total_cashback:,.0f}</div>
-                    </div>""", unsafe_allow_html=True)
-                with m3:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-lbl">EXTRA vs 1% CARD</div>
-                        <div class="metric-val" style="-webkit-text-fill-color:#00f5a0">
-                            ₹{total_extra:,.0f}
-                        </div>
-                    </div>""", unsafe_allow_html=True)
-                with m4:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-lbl">EFFECTIVE RATE</div>
-                        <div class="metric-val">{eff_rate:.2f}%</div>
-                    </div>""", unsafe_allow_html=True)
+    # ── Anomaly Detection ─────────────────────────────────────────
+    feats = df[["WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"]].copy()
+    sc = StandardScaler()
+    fs = sc.fit_transform(feats)
+    m  = IsolationForest(n_estimators=100, contamination=0.02, random_state=42)
+    m.fit(fs)
+    df["IS_ANOMALY"] = m.predict(fs)
+    df["IS_ANOMALY"] = df["IS_ANOMALY"].map({1: 0, -1: 1})
+    df["MONTH"] = df["DATE"].dt.to_period("M")
+    return df
 
-                st.markdown("</div>", unsafe_allow_html=True)
+def dark_fig(rows, cols, size):
+    fig, axes = plt.subplots(rows, cols, figsize=size)
+    fig.patch.set_facecolor("#020408")
+    axs = axes.flat if hasattr(axes, "flat") else [axes]
+    for ax in axs:
+        ax.set_facecolor("#0a0e1a")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_color("#1a1f2e")
+        ax.spines["left"].set_color("#1a1f2e")
+        ax.tick_params(colors="#555")
+    return fig, axes
 
-                # ── Category optimisation guide ───────────────────
-                st.markdown("""
-                <div style="margin:24px 40px 8px;">
-                    <div style="font-family:DM Mono,monospace;font-size:10px;
-                                color:#00f5a0;letter-spacing:2px;margin-bottom:12px;">
-                        STEP 02 — CATEGORY OPTIMISATION GUIDE
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
 
-                for _, row in sc_cat.iterrows():
-                    pct_bar = min(int(row['avg_rate'] / 6 * 100), 100)
-                    st.markdown(f"""
-                    <div style="margin:0 40px 10px;padding:16px 20px;
-                                background:rgba(255,255,255,0.03);
-                                border:1px solid rgba(255,255,255,0.07);
-                                border-radius:12px;">
-                        <div style="display:flex;justify-content:space-between;
-                                    align-items:center;margin-bottom:8px;">
-                            <div style="font-weight:700;font-size:14px;">
-                                {row['CATEGORY']}
-                            </div>
-                            <div style="font-family:DM Mono,monospace;font-size:11px;
-                                        color:#00f5a0;">
-                                Use → {row['best_card']}
-                            </div>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;
-                                    color:rgba(255,255,255,0.4);font-size:12px;
-                                    margin-bottom:8px;">
-                            <span>₹{row['spend']:,.0f} spent · {row['txns']:,} txns</span>
-                            <span>Earns ₹{row['cashback']:,.0f} · {row['avg_rate']:.1f}% avg</span>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.06);
-                                    border-radius:4px;height:4px;">
-                            <div style="background:linear-gradient(90deg,#00f5a0,#00d4ff);
-                                        width:{pct_bar}%;height:4px;border-radius:4px;">
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+def cfmt(x, pos):
+    raw = abs(x)
+    if raw >= 1e7:   return "Rs." + str(round(x/1e7, 1)) + "Cr"
+    elif raw >= 1e5: return "Rs." + str(round(x/1e5, 1)) + "L"
+    elif raw >= 1e3: return "Rs." + str(round(x/1e3, 0))[:-2] + "K"
+    else:            return "Rs." + str(round(x, 0))[:-2]
 
-                # ── Top transactions table ────────────────────────
-                st.markdown("""
-                <div style="margin:24px 40px 8px;">
-                    <div style="font-family:DM Mono,monospace;font-size:10px;
-                                color:#00f5a0;letter-spacing:2px;margin-bottom:12px;">
-                        STEP 03 — TOP 20 TRANSACTIONS
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
 
-                top20 = (sc_results
-                         .nlargest(20, 'BEST_CASHBACK')
-                         [['DATE','DESCRIPTION','CATEGORY',
-                           'AMOUNT','BEST_CARD','BEST_RATE','BEST_CASHBACK']]
-                         .rename(columns={
-                             'BEST_CARD'    : 'Use This Card',
-                             'BEST_RATE'    : 'Rate %',
-                             'BEST_CASHBACK': 'Earns ₹'
-                         })
-                        )
-                top20['AMOUNT']  = top20['AMOUNT'].apply(lambda x: f"₹{x:,.0f}")
-                top20['Earns ₹'] = top20['Earns ₹'].apply(lambda x: f"₹{x:,.0f}")
-                top20['Rate %']  = top20['Rate %'].apply(lambda x: f"{x:.1f}%")
+def build_context(df):
+    raw_total = df["WITHDRAWAL AMT"].sum()
+    if raw_total >= 1e7:   scale, slbl = 1e7, "Crores"
+    elif raw_total >= 1e5: scale, slbl = 1e5, "Lakhs"
+    else:                  scale, slbl = 1,   "Rupees"
+    total_wd    = round(df["WITHDRAWAL AMT"].sum() / scale, 2)
+    total_dep   = round(df["DEPOSIT AMT"].sum() / scale, 2)
+    avg_monthly = round(df.groupby("MONTH")["WITHDRAWAL AMT"].sum().mean() / scale, 2)
+    anomalies   = int(df["IS_ANOMALY"].sum())
+    top_cat     = df["CATEGORY"].value_counts().index[0]
+    monthly_t   = df.groupby("MONTH")["WITHDRAWAL AMT"].sum()
+    max_month   = str(monthly_t.idxmax())
+    min_month   = str(monthly_t.idxmin())
+    top5        = df.nlargest(5, "WITHDRAWAL AMT")
+    top5_lines  = []
+    for _, row in top5.iterrows():
+        top5_lines.append("  - " + row["DATE"].strftime("%d %b %Y") + " | " + str(row["TRANSACTION DETAILS"])[:40] + " | " + cfmt(row["WITHDRAWAL AMT"], None))
+    trend_parts = []
+    for mo, val in monthly_t.items():
+        trend_parts.append(str(mo) + ": " + str(round(val/scale, 2)))
+    cat_parts = []
+    for c, a in df.groupby("CATEGORY")["WITHDRAWAL AMT"].sum().sort_values(ascending=False).items():
+        cat_parts.append("  - " + c + ": " + str(round(a/scale, 2)) + " " + slbl)
+    flow = "SURPLUS" if total_dep > total_wd else "DEFICIT"
+    ctx = "You are FinSight, a smart personal AI financial advisor.\n"
+    ctx += "REAL USER BANK DATA (all amounts in " + slbl + "):\n"
+    ctx += "Date Range: " + df["DATE"].min().strftime("%d %b %Y") + " to " + df["DATE"].max().strftime("%d %b %Y") + "\n"
+    ctx += "Total Transactions: " + str(len(df)) + "\n"
+    ctx += "Total Withdrawals: " + str(total_wd) + " " + slbl + "\n"
+    ctx += "Total Deposits: " + str(total_dep) + " " + slbl + "\n"
+    ctx += "Net Flow: " + str(round(total_dep-total_wd, 2)) + " " + slbl + " (" + flow + ")\n"
+    ctx += "Avg Monthly Spending: " + str(avg_monthly) + " " + slbl + "\n"
+    ctx += "Highest Spending Month: " + max_month + "\n"
+    ctx += "Lowest Spending Month: " + min_month + "\n"
+    ctx += "Anomalies Flagged: " + str(anomalies) + "\n"
+    ctx += "Top Category: " + top_cat + "\n"
+    ctx += "Monthly Trend:\n" + " | ".join(trend_parts) + "\n"
+    ctx += "Top 5 Largest Withdrawals:\n" + "\n".join(top5_lines) + "\n"
+    ctx += "Category Breakdown:\n" + "\n".join(cat_parts) + "\n"
+    ctx += "IMPORTANT: Use ONLY this data. Always give specific numbers. Never say data unavailable. Be concise, friendly and actionable."
+    return ctx
 
-                st.dataframe(
-                    top20,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "DESCRIPTION": st.column_config.TextColumn(width="large"),
-                        "Use This Card": st.column_config.TextColumn(width="medium"),
-                    }
-                )
 
+# ── Landing HTML with blank-screen fallback (Fix B) ──────────
+_landing_path = '/mount/src/finsight/landing.html'
+if os.path.exists(_landing_path):
+    LANDING_HTML = open(_landing_path).read()
+else:
+    # Fallback: show a minimal launch page instead of blank screen
+    LANDING_HTML = """<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body{margin:0;background:#020408;display:flex;align-items:center;
+       justify-content:center;min-height:100vh;font-family:sans-serif;}
+  .box{text-align:center;color:#e8eaf0;}
+  h1{font-size:48px;background:linear-gradient(135deg,#00f5a0,#00d4ff);
+     -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  p{color:rgba(255,255,255,0.4);margin:12px 0 32px;}
+  button{background:linear-gradient(135deg,#00f5a0,#00d4ff);border:none;
+         color:#000;font-weight:700;padding:14px 36px;border-radius:10px;
+         font-size:15px;cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>⚡ FinSight</h1>
+  <p>AI-powered bank statement analysis</p>
+  <button onclick="window.parent.postMessage({type:'finsight_launch'},'*')">
+    ⚡ Launch App
+  </button>
+</div>
+</body>
+</html>"""
+
+
+if st.session_state.page == "landing":
+    components.html(LANDING_HTML, height=2400, scrolling=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("⚡ Launch App — Analyze My Finances", use_container_width=True):
+            st.session_state.page = "app"
+            st.rerun()
+else:
+    st.markdown("<div class='app-wrap'>", unsafe_allow_html=True)
+    c1, c2 = st.columns([4, 1])
+    with c1:
+        st.markdown('<div style="padding:20px 0 12px;"><span style="font-size:28px;font-weight:800;">⚡<span style="background:linear-gradient(135deg,#00f5a0,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">FinSight</span></span><span style="font-family:DM Mono,monospace;font-size:11px;color:rgba(255,255,255,0.25);margin-left:16px;letter-spacing:2px;">AI FINANCIAL INTELLIGENCE</span></div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("← Home"):
+            st.session_state.page = "landing"
+            st.rerun()
+    st.markdown("<hr class='divider'>", unsafe_allow_html=True)
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📤  UPLOAD", "📊  DASHBOARD", "📈  FORECAST", "🤖  AI ADVISOR", "💳  SMARTCASH"])
+
+    with tab1:
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin:28px 0 8px;">UPLOAD YOUR FILE</div>', unsafe_allow_html=True)
+            st.markdown('<h3 style="font-size:24px;font-weight:700;margin-bottom:8px;">Bank Statement Analyzer</h3>', unsafe_allow_html=True)
+            st.markdown('<p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px;">Upload any CSV or Excel bank statement. We auto-detect columns and run the full ML pipeline.</p>', unsafe_allow_html=True)
+            uploaded = st.file_uploader("", type=["csv", "xlsx", "xls", "pdf"], label_visibility="collapsed")
+            pdf_password = ""
+            if uploaded and uploaded.name.lower().endswith(".pdf"):
+                st.markdown('<div style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1px;margin:10px 0 4px;">🔒 PDF PASSWORD (if protected)</div>', unsafe_allow_html=True)
+                pdf_password = st.text_input("", placeholder="PAN number / DOB (DDMMYYYY) / account number", type="password", label_visibility="collapsed")
+                st.caption("💡 Leave blank if the PDF has no password")
+            if uploaded:
+                if st.button("⚡ Run Analysis", use_container_width=True):
+                    with st.spinner("Running ML pipeline..."):
+                        try:
+                            try:
+                                df = process_file(uploaded, pdf_password)
+                            except ValueError as _ve:
+                                _msg = str(_ve)
+                                if 'password' in _msg.lower() or '❌' in _msg:
+                                    st.error(_msg)
+                                    st.stop()
+                                else:
+                                    raise
+                            st.session_state.user_df = df
+                            st.session_state.analysis_done = True
+                            st.success("✅ Analysis complete! Found " + str(len(df)) + " transactions.")
+                        except Exception as e:
+                            st.error("❌ " + str(e))
+        with c2:
+            st.markdown('<div class="glass" style="margin-top:72px;"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px;margin-bottom:16px;">AUTO-DETECTED COLUMNS</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><tr style="color:rgba(255,255,255,0.3);"><td style="padding:6px 0;font-family:DM Mono,monospace;">Required As</td><td style="padding:6px 0;font-family:DM Mono,monospace;">Also Accepted</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:#00f5a0;font-family:DM Mono,monospace;font-size:11px;">DATE</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Transaction Date, Timestamp</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:#00f5a0;font-family:DM Mono,monospace;font-size:11px;">TRANSACTION DETAILS</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Narration, Type, Category</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:#00f5a0;font-family:DM Mono,monospace;font-size:11px;">WITHDRAWAL AMT</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Debit, Debit Amt, DR</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:rgba(255,255,255,0.5);font-family:DM Mono,monospace;font-size:11px;">DEPOSIT AMT</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Credit, Credit Amt, CR</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:rgba(255,255,255,0.5);font-family:DM Mono,monospace;font-size:11px;">BALANCE AMT</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Balance, Closing Balance</td></tr></table></div>', unsafe_allow_html=True)
+
+        if st.session_state.analysis_done and st.session_state.user_df is not None:
+            df = st.session_state.user_df
+            st.markdown("<hr class='divider'>", unsafe_allow_html=True)
+            st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:20px;">ANALYSIS SUMMARY</div>', unsafe_allow_html=True)
+            c1, c2, c3, c4 = st.columns(4)
+            for col, (val, lbl) in zip([c1, c2, c3, c4], [
+                (str(len(df)), "TRANSACTIONS"),
+                (cfmt(df["WITHDRAWAL AMT"].sum(), None), "TOTAL WITHDRAWN"),
+                (str(int(df["IS_ANOMALY"].sum())), "ANOMALIES FLAGGED"),
+                (str(round((df["CATEGORY"] != "Other").sum()/len(df)*100, 1)) + "%", "AUTO CATEGORIZED"),
+            ]):
+                with col:
+                    st.markdown("<div class='metric-card'><div class='metric-val'>" + val + "</div><div class='metric-lbl'>" + lbl + "</div></div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            disp = df[["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "DEPOSIT AMT", "CATEGORY", "IS_ANOMALY"]].head(20).copy()
+            disp["IS_ANOMALY"] = disp["IS_ANOMALY"].map({1: "🚨 Yes", 0: "✅ No"})
+            disp["WITHDRAWAL AMT"] = disp["WITHDRAWAL AMT"].apply(lambda x: cfmt(x, None))
+            disp["DEPOSIT AMT"]    = disp["DEPOSIT AMT"].apply(lambda x: cfmt(x, None))
+            st.dataframe(disp, use_container_width=True, hide_index=True)
+
+    with tab2:
+        if st.session_state.user_df is None:
+            st.markdown('<div style="text-align:center;padding:100px 0;"><div style="font-size:56px;margin-bottom:16px;">📤</div><div style="font-family:DM Mono,monospace;font-size:12px;color:rgba(255,255,255,0.2);letter-spacing:2px;">UPLOAD A FILE FIRST</div></div>', unsafe_allow_html=True)
+        else:
+            df = st.session_state.user_df
+            st.markdown('<div style="padding:28px 0 0;font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:20px;">YOUR FINANCIAL DASHBOARD</div>', unsafe_allow_html=True)
+            fig, axes = dark_fig(2, 2, (16, 10))
+            fig.suptitle("FinSight Financial Dashboard", fontsize=16, fontweight="bold", color="white", y=0.98)
+            pal = ["#00f5a0","#00d4ff","#7b61ff","#ff4d6d","#ffd60a","#ff9f43","#a8e063","#f8a5c2","#778ca3","#2d98da","#4b7bec","#a55eea"]
+            mwd = df.groupby(df["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum()
+            axes[0,0].plot(range(len(mwd)), mwd.values, color="#00f5a0", linewidth=2.5)
+            axes[0,0].fill_between(range(len(mwd)), mwd.values, alpha=0.1, color="#00f5a0")
+            axes[0,0].set_title("Monthly Withdrawals", color="white", fontsize=12, pad=12)
+            axes[0,0].yaxis.set_major_formatter(mticker.FuncFormatter(cfmt))
+            step = max(1, len(mwd)//8)
+            axes[0,0].set_xticks(range(0, len(mwd), step))
+            axes[0,0].set_xticklabels(mwd.index.astype(str)[::step], rotation=45, ha="right", color="#555", fontsize=8)
+            cc = df["CATEGORY"].value_counts()
+            axes[0,1].barh(cc.index, cc.values, color=pal[:len(cc)])
+            axes[0,1].set_title("Transactions by Category", color="white", fontsize=12, pad=12)
+            axes[0,1].tick_params(colors="#aaa", labelsize=9)
+            axes[0,1].invert_yaxis()
+            am = df[df["IS_ANOMALY"]==1].groupby("MONTH")["IS_ANOMALY"].count()
+            x = list(range(len(am)))
+            axes[1,0].bar(x, am.values, color="#ff4d6d", alpha=0.85, edgecolor="none")
+            axes[1,0].set_title("Anomalies Per Month", color="white", fontsize=12, pad=12)
+            step2 = max(1, len(x)//8)
+            axes[1,0].set_xticks(x[::step2])
+            axes[1,0].set_xticklabels(am.index.astype(str)[::step2], rotation=45, ha="right", color="#555", fontsize=8)
+            wd = df[df["WITHDRAWAL AMT"] > 0]["WITHDRAWAL AMT"]
+            axes[1,1].hist(wd, bins=50, color="#00d4ff", edgecolor="#020408", log=True, alpha=0.9)
+            axes[1,1].set_title("Withdrawal Distribution (log)", color="white", fontsize=12, pad=12)
+            axes[1,1].tick_params(colors="#555")
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+
+    with tab3:
+        if st.session_state.user_df is None:
+            st.markdown('<div style="text-align:center;padding:100px 0;"><div style="font-size:56px;margin-bottom:16px;">📈</div><div style="font-family:DM Mono,monospace;font-size:12px;color:rgba(255,255,255,0.2);letter-spacing:2px;">UPLOAD A FILE FIRST</div></div>', unsafe_allow_html=True)
+        else:
+            df = st.session_state.user_df
+            st.markdown('<div style="padding:28px 0 0;font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:8px;">6-MONTH EXPENSE FORECAST</div>', unsafe_allow_html=True)
+            with st.spinner("Training forecast model..."):
+                try:
+                    from prophet import Prophet
+                    ms = df.groupby(df["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
+                    ms.columns = ["ds", "y"]
+                    ms["ds"] = ms["ds"].dt.to_timestamp()
+                    m = Prophet(yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False, changepoint_prior_scale=0.05)
+                    m.fit(ms)
+                    future = m.make_future_dataframe(periods=6, freq="MS")
+                    fc = m.predict(future)
+                    fig2, ax2 = dark_fig(2, 1, (14, 10))
+                    ax2[0].plot(ms["ds"], ms["y"], color="#00c8e0", linewidth=2.5, label="Actual")
+                    ax2[0].plot(fc["ds"], fc["yhat"], color="#00f0a0", linewidth=2, linestyle="--", label="Forecast")
+                    ax2[0].fill_between(fc["ds"], fc["yhat_lower"], fc["yhat_upper"], alpha=0.12, color="#00f0a0")
+                    ax2[0].axvline(x=ms["ds"].max(), color="#ff3c64", linestyle="--", linewidth=1.5, alpha=0.7, label="Forecast Start")
+                    ax2[0].set_title("Monthly Withdrawal Forecast", fontsize=13, pad=14)
+                    ax2[0].yaxis.set_major_formatter(mticker.FuncFormatter(cfmt))
+                    ax2[0].legend(facecolor="#080d1a", labelcolor="#c8d0e0", fontsize=9)
+                    fo = fc.tail(6)
+                    bars = ax2[1].bar(fo["ds"].dt.strftime("%b %Y"), fo["yhat"], color="#7b61ff", alpha=0.85, width=0.6)
+                    ax2[1].set_title("Predicted Spending Next 6 Months", fontsize=13, pad=14)
+                    ax2[1].yaxis.set_major_formatter(mticker.FuncFormatter(cfmt))
+                    for bar, val in zip(bars, fo["yhat"]):
+                        ax2[1].text(bar.get_x()+bar.get_width()/2, val+max(fo["yhat"])*0.02, cfmt(val, None), ha="center", va="bottom", fontsize=9, color="#c8d0e0")
+                    plt.tight_layout(pad=3)
+                    st.pyplot(fig2)
+                    plt.close()
+                    ft = fo[["ds","yhat","yhat_lower","yhat_upper"]].copy()
+                    ft["Month"]     = ft["ds"].dt.strftime("%B %Y")
+                    ft["Predicted"] = ft["yhat"].apply(lambda x: cfmt(x, None))
+                    ft["Lower"]     = ft["yhat_lower"].apply(lambda x: cfmt(x, None))
+                    ft["Upper"]     = ft["yhat_upper"].apply(lambda x: cfmt(x, None))
+                    st.dataframe(ft[["Month","Predicted","Lower","Upper"]], use_container_width=True, hide_index=True)
+                except Exception as e:
+                    st.error("Forecast error: " + str(e))
+                    st.info("Need at least 6 months of data for reliable forecasting.")
+
+    with tab4:
+        st.markdown('<div style="padding:28px 0 0;font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:8px;">AI FINANCIAL ADVISOR</div>', unsafe_allow_html=True)
+        if st.session_state.user_df is None:
+            st.markdown('<div style="text-align:center;padding:100px 0;"><div style="font-size:56px;margin-bottom:16px;">🤖</div><div style="font-family:DM Mono,monospace;font-size:12px;color:rgba(255,255,255,0.2);letter-spacing:2px;">UPLOAD A FILE FIRST</div></div>', unsafe_allow_html=True)
+        elif not GROQ_API_KEY:
+            st.error("GROQ_API_KEY not set in Streamlit Secrets")
+        else:
+            df = st.session_state.user_df
+            context = build_context(df)
+            qc1, qc2, qc3 = st.columns(3)
+            quick_qs = [
+                "What is my biggest spending category and how can I reduce it?",
+                "Are there suspicious transactions I should investigate?",
+                "Give me a 3-step plan to improve my finances."
+            ]
+            for i, (col, q) in enumerate(zip([qc1, qc2, qc3], quick_qs)):
+                with col:
+                    if st.button(q[:36]+"...", key="qq"+str(i), use_container_width=True):
+                        st.session_state.chat_history.append({"role": "user", "content": q})
+                        with st.spinner("Thinking..."):
+                            r = groq_client.chat.completions.create(
+                                model="llama-3.3-70b-versatile",
+                                messages=[{"role": "system", "content": context}, {"role": "user", "content": q}],
+                                max_tokens=600
+                            )
+                            st.session_state.chat_history.append({"role": "assistant", "content": r.choices[0].message.content})
+                        st.rerun()
+            st.markdown("<br>", unsafe_allow_html=True)
+            for msg in st.session_state.chat_history:
+                if msg["role"] == "user":
+                    st.markdown("<div class='chat-lbl' style='text-align:right;'>YOU</div><div class='chat-u'>" + msg["content"] + "</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<div class='chat-lbl'>FINSIGHT AI</div><div class='chat-ai'>" + msg["content"] + "</div>", unsafe_allow_html=True)
+            user_input = st.chat_input("Ask anything about your finances...")
+            if user_input:
+                st.session_state.chat_history.append({"role": "user", "content": user_input})
+                with st.spinner("Thinking..."):
+                    msgs = [{"role": "system", "content": context}] + st.session_state.chat_history[-12:]
+                    r = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=msgs, max_tokens=800)
+                    st.session_state.chat_history.append({"role": "assistant", "content": r.choices[0].message.content})
+                st.rerun()
+            if st.session_state.chat_history:
+                if st.button("🗑  Clear Chat"):
+                    st.session_state.chat_history = []
+                    st.rerun()
+
+
+    with tab5:
+        st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 01 — SMARTCASH</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💳 Card Reward Maximiser</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Find the best card in your wallet for every rupee you spend.</div></div>', unsafe_allow_html=True)
+        if st.session_state.get("df") is None:
+            st.info("Upload your bank statement in the UPLOAD tab first.")
+        elif not SC_CARD_MASTER:
+            st.error("Card database failed to load — check card_master.json on GitHub.")
+        else:
+            df_sc = st.session_state["df"]
+            card_opts = {c["bank"]+" — "+c["card_name"]+" ("+("FREE" if c["annual_fee"]==0 else "₹"+str(c["annual_fee"])+"/yr")+")": c["card_id"] for c in SC_CARD_MASTER}
+            sel = st.multiselect("Select credit cards you own:", list(card_opts.keys()), key="sc_wallet_sel")
+            wallet_sc = [card_opts[s] for s in sel]
+            run_sc = st.button("⚡ Analyse Cashback Potential", key="sc_run_btn", disabled=(len(wallet_sc)==0))
+            if run_sc and wallet_sc:
+                with st.spinner("Calculating best card for every transaction..."):
+                    st.session_state["sc_results"] = sc_analyse(df_sc, wallet_sc)
+                    st.session_state["sc_cat"]     = sc_summary(st.session_state["sc_results"])
+            if st.session_state.get("sc_results") is not None:
+                rdf  = st.session_state["sc_results"]
+                scat = st.session_state["sc_cat"]
+                tot_sp = rdf["AMOUNT"].sum()
+                tot_cb = rdf["BEST_CASHBACK"].sum()
+                tot_ex = rdf["EXTRA"].sum()
+                eff_r  = (tot_cb/tot_sp*100) if tot_sp>0 else 0
+                c1,c2,c3,c4 = st.columns(4)
+                c1.markdown(f'<div class="metric-card"><div class="metric-lbl">TOTAL SPEND</div><div class="metric-val">₹{tot_sp/1e5:.1f}L</div></div>', unsafe_allow_html=True)
+                c2.markdown(f'<div class="metric-card"><div class="metric-lbl">BEST CASHBACK</div><div class="metric-val">₹{tot_cb:,.0f}</div></div>', unsafe_allow_html=True)
+                c3.markdown(f'<div class="metric-card"><div class="metric-lbl">EXTRA vs 1% CARD</div><div class="metric-val">₹{tot_ex:,.0f}</div></div>', unsafe_allow_html=True)
+                c4.markdown(f'<div class="metric-card"><div class="metric-lbl">EFFECTIVE RATE</div><div class="metric-val">{eff_r:.2f}%</div></div>', unsafe_allow_html=True)
+                st.markdown("<div style='margin:20px 0 8px'><b>Category Guide — Best card per spend type:</b></div>", unsafe_allow_html=True)
+                for _, crow in scat.iterrows():
+                    pct = min(int(crow["avg_rate"]/6*100), 100)
+                    st.markdown(f'<div style="margin-bottom:8px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><b>{crow["CATEGORY"]}</b><span style="color:#00f5a0;font-size:11px;font-family:DM Mono,monospace">Use → {crow["best_card"]}</span></div><div style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:8px">₹{crow["spend"]:,.0f} spent · {crow["txns"]:,} txns · earns ₹{crow["cashback"]:,.0f} at {crow["avg_rate"]:.1f}%</div><div style="background:rgba(255,255,255,0.06);border-radius:3px;height:3px"><div style="background:linear-gradient(90deg,#00f5a0,#00d4ff);width:{pct}%;height:3px;border-radius:3px"></div></div></div>', unsafe_allow_html=True)
+                st.markdown("<div style='margin:20px 0 8px'><b>Top 20 Transactions — Best card to use:</b></div>", unsafe_allow_html=True)
+                top20 = rdf.nlargest(20,"BEST_CASHBACK")[["DATE","DESCRIPTION","CATEGORY","AMOUNT","BEST_CARD","BEST_RATE","BEST_CASHBACK"]].copy()
+                top20["AMOUNT"]        = top20["AMOUNT"].apply(lambda x: f"₹{x:,.0f}")
+                top20["BEST_CASHBACK"] = top20["BEST_CASHBACK"].apply(lambda x: f"₹{x:,.0f}")
+                top20["BEST_RATE"]     = top20["BEST_RATE"].apply(lambda x: f"{x:.1f}%")
+                st.dataframe(top20, use_container_width=True, hide_index=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + PROPHET + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
