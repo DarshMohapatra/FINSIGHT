@@ -703,7 +703,7 @@ def mu_compute_roundups(df, threshold=10):
     monthly["DATE"] = monthly["DATE"].dt.to_timestamp()
     return df_w, monthly
 
-    tab1, tab2, tab3, tab4, tab5, tab7, tab6 = st.tabs(["📤  UPLOAD", "📊  DASHBOARD", "📈  FORECAST", "🤖  AI ADVISOR", "💳  SMARTCASH", "💰  INVEST"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📤  UPLOAD", "📊  DASHBOARD", "📈  FORECAST", "🤖  AI ADVISOR", "💳  SMARTCASH", "💰  INVEST"])
 
     with tab1:
         c1, c2 = st.columns([2, 1])
@@ -1138,7 +1138,7 @@ def mu_compute_roundups(df, threshold=10):
                 st.markdown(f'<div style="margin:16px 40px;padding:12px 16px;background:rgba(255,255,255,0.02);border-left:3px solid rgba(255,255,255,0.15);border-radius:4px"><span style="font-size:10px;color:rgba(255,255,255,0.3);font-family:DM Mono,monospace">⚖️ SEBI DISCLAIMER · {MU_DISCLAIMER}</span></div>', unsafe_allow_html=True)
 
 
-    with tab7:
+    with tab6:
         st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 17 — MICROROUNDUP</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💰 MicroRoundUp India</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Round up every transaction to the nearest ₹10/₹50/₹100. Invest the spare change into Nifty ETF, Gold, or ELSS. Watch it compound.</div></div>', unsafe_allow_html=True)
         if st.session_state.get("user_df") is None:
             st.info("Upload your bank statement in the UPLOAD tab first.")
