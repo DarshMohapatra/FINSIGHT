@@ -1,0 +1,231 @@
+{
+  "instruments": [
+    {
+      "instrument_id": "NIFTYBEES",
+      "name": "Nifty 50 ETF",
+      "full_name": "Nippon India Nifty 50 BeES ETF",
+      "type": "Equity ETF",
+      "category": "Large Cap",
+      "nse_symbol": "NIFTYBEES.NS",
+      "fund_house": "Nippon India MF",
+      "expense_ratio": 0.04,
+      "risk": "Medium",
+      "risk_color": "#f59e0b",
+      "min_sip_amount": 500,
+      "latest_price": 281.93,
+      "returns": {
+        "1Y": 10.3,
+        "3Y": 13.3,
+        "5Y": 13.5,
+        "10Y": null
+      },
+      "tax_benefit": false,
+      "description": "Tracks Nifty 50 \u2014 India's top 50 companies. Most liquid equity ETF.",
+      "ideal_for": "Core portfolio \u2014 long term wealth building",
+      "platform_links": {
+        "groww": "https://groww.in/etfs/nippon-india-etf-nifty-50-bees",
+        "zerodha": "https://coin.zerodha.com/etfs/NIFTYBEES",
+        "kuvera": "https://kuvera.in/etfs/NIFTYBEES"
+      }
+    },
+    {
+      "instrument_id": "JUNIORBEES",
+      "name": "Nifty Next 50 ETF",
+      "full_name": "Nippon India ETF Nifty Next 50 Junior BeES",
+      "type": "Equity ETF",
+      "category": "Large & Mid Cap",
+      "nse_symbol": "JUNIORBEES.NS",
+      "fund_house": "Nippon India MF",
+      "expense_ratio": 0.19,
+      "risk": "Medium-High",
+      "risk_color": "#f97316",
+      "min_sip_amount": 500,
+      "latest_price": 739.95,
+      "returns": {
+        "1Y": 14.3,
+        "3Y": 21.8,
+        "5Y": 16.7,
+        "10Y": null
+      },
+      "tax_benefit": false,
+      "description": "Tracks Nifty Next 50 \u2014 companies 51-100 by market cap. Higher growth potential.",
+      "ideal_for": "Growth allocation \u2014 5+ year horizon",
+      "platform_links": {
+        "groww": "https://groww.in/etfs/nippon-india-etf-nifty-junior-bees",
+        "zerodha": "https://coin.zerodha.com/etfs/JUNIORBEES",
+        "kuvera": "https://kuvera.in/etfs/JUNIORBEES"
+      }
+    },
+    {
+      "instrument_id": "GOLDBEES",
+      "name": "Gold ETF",
+      "full_name": "Nippon India ETF Gold BeES",
+      "type": "Gold ETF",
+      "category": "Commodity",
+      "nse_symbol": "GOLDBEES.NS",
+      "fund_house": "Nippon India MF",
+      "expense_ratio": 0.82,
+      "risk": "Medium",
+      "risk_color": "#eab308",
+      "min_sip_amount": 500,
+      "latest_price": 138.32,
+      "returns": {
+        "1Y": 91.9,
+        "3Y": 41.3,
+        "5Y": 26.6,
+        "10Y": null
+      },
+      "tax_benefit": false,
+      "description": "Physical gold-backed ETF. 1 unit \u2248 1/100 gram of gold. Inflation hedge.",
+      "ideal_for": "Hedge against inflation and equity market volatility",
+      "platform_links": {
+        "groww": "https://groww.in/etfs/nippon-india-etf-gold-bees",
+        "zerodha": "https://coin.zerodha.com/etfs/GOLDBEES",
+        "kuvera": "https://kuvera.in/etfs/GOLDBEES"
+      }
+    },
+    {
+      "instrument_id": "SGB",
+      "name": "Sovereign Gold Bond",
+      "full_name": "RBI Sovereign Gold Bond Scheme",
+      "type": "Gold Bond",
+      "category": "Commodity + Fixed Income",
+      "nse_symbol": null,
+      "fund_house": "Reserve Bank of India",
+      "expense_ratio": 0.0,
+      "risk": "Low-Medium",
+      "risk_color": "#84cc16",
+      "min_sip_amount": 5000,
+      "latest_price": null,
+      "returns": {
+        "1Y": 94.4,
+        "3Y": 43.8,
+        "5Y": 29.1
+      },
+      "tax_benefit": true,
+      "tax_note": "Capital gains tax exempt on maturity (8-year tenure)",
+      "description": "Government-issued gold bonds. 2.5% annual interest + gold price appreciation. Zero expense ratio.",
+      "ideal_for": "Long-term gold allocation \u2014 best tax efficiency",
+      "platform_links": {
+        "rbi": "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
+        "groww": "https://groww.in/bonds/sovereign-gold-bonds",
+        "zerodha": "https://zerodha.com/z-connect/general/sovereign-gold-bonds"
+      },
+      "returns_note": "Approximated as Gold ETF returns + 2.5% fixed interest. Actual SGB returns vary by tranche."
+    },
+    {
+      "instrument_id": "BBETF0432",
+      "name": "Bharat Bond ETF 2032",
+      "full_name": "Edelweiss Bharat Bond ETF April 2032",
+      "type": "Debt ETF",
+      "category": "AAA PSU Bonds",
+      "nse_symbol": "BBETF0432.NS",
+      "fund_house": "Edelweiss MF",
+      "expense_ratio": 0.0005,
+      "risk": "Low",
+      "risk_color": "#22c55e",
+      "min_sip_amount": 1000,
+      "latest_price": 1319.78,
+      "returns": {
+        "1Y": 7.7,
+        "3Y": 8.3,
+        "5Y": null,
+        "10Y": null
+      },
+      "tax_benefit": false,
+      "description": "AAA-rated PSU bond ETF. Near-fixed return (~7.5% YTM). Capital preservation with better-than-FD returns.",
+      "ideal_for": "Conservative allocation \u2014 debt portion of portfolio",
+      "platform_links": {
+        "groww": "https://groww.in/etfs/bharat-bond-etf-april-2032",
+        "zerodha": "https://coin.zerodha.com/etfs/BBETF0432",
+        "kuvera": "https://kuvera.in/etfs/BBETF0432"
+      }
+    },
+    {
+      "instrument_id": "MIRAE_ELSS",
+      "name": "Mirae Asset ELSS Tax Saver",
+      "full_name": "Mirae Asset Tax Saver Fund (Direct Growth)",
+      "type": "ELSS",
+      "category": "Tax-Saving Equity",
+      "nse_symbol": null,
+      "fund_house": "Mirae Asset MF",
+      "expense_ratio": 0.51,
+      "risk": "Medium-High",
+      "risk_color": "#f97316",
+      "min_sip_amount": 500,
+      "latest_price": null,
+      "returns": {
+        "1Y": 11.2,
+        "3Y": 13.8,
+        "5Y": 14.1
+      },
+      "tax_benefit": true,
+      "tax_note": "\u20b91.5L/year deduction under Section 80C. 3-year lock-in.",
+      "description": "India's largest ELSS by AUM. Large + mid cap portfolio. Dual benefit: market returns + 80C deduction.",
+      "ideal_for": "Tax saving + wealth creation \u2014 salaried employees in 20-30% tax slab",
+      "platform_links": {
+        "groww": "https://groww.in/mutual-funds/mirae-asset-tax-saver-fund-direct-plan",
+        "zerodha": "https://coin.zerodha.com/dashboard/search?q=mirae+tax+saver",
+        "kuvera": "https://kuvera.in/mf/mirae-asset-tax-saver-fund-direct-growth"
+      }
+    },
+    {
+      "instrument_id": "QUANT_ELSS",
+      "name": "Quant ELSS Tax Saver",
+      "full_name": "Quant ELSS Tax Saver Fund (Direct Growth)",
+      "type": "ELSS",
+      "category": "Tax-Saving Equity",
+      "nse_symbol": null,
+      "fund_house": "Quant MF",
+      "expense_ratio": 0.57,
+      "risk": "High",
+      "risk_color": "#ef4444",
+      "min_sip_amount": 500,
+      "latest_price": null,
+      "returns": {
+        "1Y": 2.1,
+        "3Y": 21.4,
+        "5Y": 28.6
+      },
+      "tax_benefit": true,
+      "tax_note": "\u20b91.5L/year deduction under Section 80C. 3-year lock-in.",
+      "description": "Highest 5Y return ELSS in India. Quant model-driven, high alpha, high volatility.",
+      "ideal_for": "Aggressive tax savers with 5+ year horizon",
+      "platform_links": {
+        "groww": "https://groww.in/mutual-funds/quant-tax-plan-direct-plan",
+        "zerodha": "https://coin.zerodha.com/dashboard/search?q=quant+elss",
+        "kuvera": "https://kuvera.in/mf/quant-tax-saver-fund-direct-growth"
+      }
+    },
+    {
+      "instrument_id": "BAF_HDFC",
+      "name": "Balanced Advantage Fund",
+      "full_name": "HDFC Balanced Advantage Fund (Direct Growth)",
+      "type": "Hybrid Fund",
+      "category": "Balanced Advantage",
+      "nse_symbol": null,
+      "fund_house": "HDFC MF",
+      "expense_ratio": 0.74,
+      "risk": "Low-Medium",
+      "risk_color": "#84cc16",
+      "min_sip_amount": 500,
+      "latest_price": null,
+      "returns": {
+        "1Y": 12.8,
+        "3Y": 15.1,
+        "5Y": 14.3
+      },
+      "tax_benefit": false,
+      "description": "Auto-rebalances between equity and debt based on market valuations. Smoother ride than pure equity.",
+      "ideal_for": "Conservative investors wanting equity exposure with lower volatility",
+      "platform_links": {
+        "groww": "https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-plan",
+        "zerodha": "https://coin.zerodha.com/dashboard/search?q=hdfc+balanced+advantage",
+        "kuvera": "https://kuvera.in/mf/hdfc-balanced-advantage-fund-direct-growth"
+      }
+    }
+  ],
+  "sebi_disclaimer": "Returns shown are historical and do not guarantee future performance. MicroRoundUp is a simulation tool \u2014 not investment advice. Please consult a SEBI-registered investment advisor before investing. Mutual fund investments are subject to market risks.",
+  "last_updated": "2026-03-03",
+  "data_source": "yfinance (ETFs) + AMFI (ELSS/Hybrid) + RBI (SGB proxy)"
+}
