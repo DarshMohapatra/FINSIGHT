@@ -23,9 +23,9 @@
       "description": "Tracks Nifty 50 \u2014 India's top 50 companies. Most liquid equity ETF.",
       "ideal_for": "Core portfolio \u2014 long term wealth building",
       "platform_links": {
-        "groww": "https://groww.in/etfs/nippon-india-etf-nifty-50-bees",
-        "zerodha": "https://coin.zerodha.com/etfs/NIFTYBEES",
-        "kuvera": "https://kuvera.in/etfs/NIFTYBEES"
+        "groww": "https://groww.in/etfs/nippon-india-etf-nifty-bees",
+        "zerodha": "https://www.nseindia.com/get-quotes/equity?symbol=NIFTYBEES",
+        "kuvera": "https://kuvera.in/explore/equity?q=nifty+bees"
       }
     },
     {
@@ -51,9 +51,9 @@
       "description": "Tracks Nifty Next 50 \u2014 companies 51-100 by market cap. Higher growth potential.",
       "ideal_for": "Growth allocation \u2014 5+ year horizon",
       "platform_links": {
-        "groww": "https://groww.in/etfs/nippon-india-etf-nifty-junior-bees",
-        "zerodha": "https://coin.zerodha.com/etfs/JUNIORBEES",
-        "kuvera": "https://kuvera.in/etfs/JUNIORBEES"
+        "groww": "https://groww.in/etfs/nippon-india-etf-junior-bees",
+        "zerodha": "https://www.nseindia.com/get-quotes/equity?symbol=JUNIORBEES",
+        "kuvera": "https://kuvera.in/explore/equity?q=junior+bees"
       }
     },
     {
@@ -80,8 +80,8 @@
       "ideal_for": "Hedge against inflation and equity market volatility",
       "platform_links": {
         "groww": "https://groww.in/etfs/nippon-india-etf-gold-bees",
-        "zerodha": "https://coin.zerodha.com/etfs/GOLDBEES",
-        "kuvera": "https://kuvera.in/etfs/GOLDBEES"
+        "zerodha": "https://www.nseindia.com/get-quotes/equity?symbol=GOLDBEES",
+        "kuvera": "https://kuvera.in/explore/equity?q=gold+bees"
       }
     },
     {
@@ -107,9 +107,8 @@
       "description": "Government-issued gold bonds. 2.5% annual interest + gold price appreciation. Zero expense ratio.",
       "ideal_for": "Long-term gold allocation \u2014 best tax efficiency",
       "platform_links": {
-        "rbi": "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
-        "groww": "https://groww.in/bonds/sovereign-gold-bonds",
-        "zerodha": "https://zerodha.com/z-connect/general/sovereign-gold-bonds"
+        "groww": "https://groww.in/fixed-income/gold-bonds",
+        "rbi": "https://www.rbi.org.in/commonperson/English/Scripts/FAQs.aspx?Id=1955"
       },
       "returns_note": "Approximated as Gold ETF returns + 2.5% fixed interest. Actual SGB returns vary by tranche."
     },
@@ -136,9 +135,9 @@
       "description": "AAA-rated PSU bond ETF. Near-fixed return (~7.5% YTM). Capital preservation with better-than-FD returns.",
       "ideal_for": "Conservative allocation \u2014 debt portion of portfolio",
       "platform_links": {
-        "groww": "https://groww.in/etfs/bharat-bond-etf-april-2032",
-        "zerodha": "https://coin.zerodha.com/etfs/BBETF0432",
-        "kuvera": "https://kuvera.in/etfs/BBETF0432"
+        "groww": "https://groww.in/etfs/edelweiss-nifty-bharat-bond-etf-2032",
+        "zerodha": "https://www.nseindia.com/get-quotes/equity?symbol=BBETF0432",
+        "kuvera": "https://kuvera.in/explore/equity?q=bharat+bond"
       }
     },
     {
@@ -164,9 +163,9 @@
       "description": "India's largest ELSS by AUM. Large + mid cap portfolio. Dual benefit: market returns + 80C deduction.",
       "ideal_for": "Tax saving + wealth creation \u2014 salaried employees in 20-30% tax slab",
       "platform_links": {
-        "groww": "https://groww.in/mutual-funds/mirae-asset-tax-saver-fund-direct-plan",
-        "zerodha": "https://coin.zerodha.com/dashboard/search?q=mirae+tax+saver",
-        "kuvera": "https://kuvera.in/mf/mirae-asset-tax-saver-fund-direct-growth"
+        "groww": "https://groww.in/mutual-funds/mirae-asset-elss-tax-saver-fund-direct-growth",
+        "zerodha": "https://coin.zerodha.com/mf/fund/INF769K01DM9/mirae-asset-elss-tax-saver-fund-direct-growth",
+        "kuvera": "https://kuvera.in/explore/mf?q=mirae+asset+tax+saver"
       }
     },
     {
@@ -192,9 +191,9 @@
       "description": "Highest 5Y return ELSS in India. Quant model-driven, high alpha, high volatility.",
       "ideal_for": "Aggressive tax savers with 5+ year horizon",
       "platform_links": {
-        "groww": "https://groww.in/mutual-funds/quant-tax-plan-direct-plan",
-        "zerodha": "https://coin.zerodha.com/dashboard/search?q=quant+elss",
-        "kuvera": "https://kuvera.in/mf/quant-tax-saver-fund-direct-growth"
+        "groww": "https://groww.in/mutual-funds/quant-elss-tax-saver-fund-direct-growth",
+        "zerodha": "https://coin.zerodha.com/mf/fund/INF966L01986/quant-elss-tax-saver-fund-direct-growth",
+        "kuvera": "https://kuvera.in/explore/mf?q=quant+elss+tax+saver"
       }
     },
     {
@@ -219,9 +218,9 @@
       "description": "Auto-rebalances between equity and debt based on market valuations. Smoother ride than pure equity.",
       "ideal_for": "Conservative investors wanting equity exposure with lower volatility",
       "platform_links": {
-        "groww": "https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-plan",
-        "zerodha": "https://coin.zerodha.com/dashboard/search?q=hdfc+balanced+advantage",
-        "kuvera": "https://kuvera.in/mf/hdfc-balanced-advantage-fund-direct-growth"
+        "groww": "https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-growth",
+        "zerodha": "https://coin.zerodha.com/mf/fund/INF179K01WA6/hdfc-balanced-advantage-fund-direct-growth",
+        "kuvera": "https://kuvera.in/explore/mf?q=hdfc+balanced+advantage"
       }
     }
   ],

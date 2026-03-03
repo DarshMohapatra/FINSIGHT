@@ -1087,23 +1087,42 @@ else:
                 fig_mc.add_trace(go.Scatter(x=years_list,y=inv,mode="lines",line=dict(color="rgba(255,255,255,0.3)",width=1.5,dash="dot"),name="Amount Invested"))
                 fig_mc.update_layout(paper_bgcolor="#080d1a",plot_bgcolor="#0d1420",margin=dict(l=40,r=40,t=30,b=40),height=380,xaxis=dict(tickvals=years_list,ticktext=[f"{y}yr" for y in years_list],showgrid=False,color="#555"),yaxis=dict(gridcolor="#1a2035",color="#555",tickformat=",.0f",tickprefix="₹"),legend=dict(bgcolor="rgba(0,0,0,0)",font=dict(color="#aaa",size=10)),)
                 st.plotly_chart(fig_mc, use_container_width=True)
-            st.markdown('<div style="margin:8px 40px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">AVAILABLE INSTRUMENTS</div>', unsafe_allow_html=True)
+            st.markdown('<div style="margin:24px 0 12px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">WHERE TO INVEST YOUR ROUND-UPS</div>', unsafe_allow_html=True)
             if MU_INSTRUMENTS:
-                for i in range(0, len(MU_INSTRUMENTS), 3):
-                        row_insts = MU_INSTRUMENTS[i:i+3]
-                        icols = st.columns(len(row_insts))
-                        for ic, inst in zip(icols, row_insts):
-                            r = inst.get("returns", {})
-                            r1 = f'{r.get("1Y","—")}%' if r.get("1Y") else "—"
-                            r3 = f'{r.get("3Y","—")}%' if r.get("3Y") else "—"
-                            r5 = f'{r.get("5Y","—")}%' if r.get("5Y") else "—"
-                            tax_badge = '<span style="background:#00f5a020;color:#00f5a0;font-size:9px;padding:2px 6px;border-radius:4px;margin-left:6px">80C</span>' if inst.get("tax_benefit") else ""
-                            links = inst.get("platform_links", {})
-                            link_html = " · ".join([f'<a href="{v}" target="_blank" style="color:#00d4ff;font-size:10px">{k.title()}</a>' for k,v in links.items()])
-                            risk_color = inst.get("risk_color","#888")
-                            ic.markdown(f'<div style="padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="display:flex;align-items:center;margin-bottom:6px"><span style="font-weight:700;font-size:13px">{inst["name"]}</span>{tax_badge}</div><div style="font-size:10px;color:{risk_color};font-family:DM Mono,monospace;margin-bottom:8px">{inst["risk"]} RISK · {inst["type"]}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px"><div style="text-align:center;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px"><div style="font-size:9px;color:rgba(255,255,255,0.4)">1Y</div><div style="font-size:12px;font-weight:600">{r1}</div></div><div style="text-align:center;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px"><div style="font-size:9px;color:rgba(255,255,255,0.4)">3Y</div><div style="font-size:12px;font-weight:600">{r3}</div></div><div style="text-align:center;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px"><div style="font-size:9px;color:rgba(255,255,255,0.4)">5Y</div><div style="font-size:12px;font-weight:600">{r5}</div></div></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:6px">{inst.get("description","")[:80]}</div><div>{link_html}</div></div>', unsafe_allow_html=True)
+                for i in range(0, len(MU_INSTRUMENTS), 2):
+                    row_insts = MU_INSTRUMENTS[i:i+2]
+                    icols = st.columns(len(row_insts))
+                    for ic, inst in zip(icols, row_insts):
+                        r = inst.get("returns", {})
+                        r1 = f'{r.get("1Y","—")}%' if r.get("1Y") else "—"
+                        r3 = f'{r.get("3Y","—")}%' if r.get("3Y") else "—"
+                        r5 = f'{r.get("5Y","—")}%' if r.get("5Y") else "—"
+                        risk_color = inst.get("risk_color","#888")
+                        tax_html = f'<span style="background:linear-gradient(135deg,#00f5a0,#00d4ff);color:#000;font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;margin-left:8px">80C</span>' if inst.get("tax_benefit") else ""
+                        links = inst.get("platform_links", {})
+                        link_btns = " ".join([f'<a href="{v}" target="_blank" style="display:inline-block;padding:5px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#00d4ff;font-size:10px;font-family:DM Mono,monospace;text-decoration:none;letter-spacing:0.5px;transition:all 0.2s">{k.title()}</a>' for k,v in links.items()])
+                        # Color the best return green
+                        r_vals = [r.get("1Y",0) or 0, r.get("3Y",0) or 0, r.get("5Y",0) or 0]
+                        r_colors = ["#e8eaf0","#e8eaf0","#e8eaf0"]
+                        if max(r_vals) > 0:
+                            r_colors[r_vals.index(max(r_vals))] = "#00f5a0"
+                        ic.markdown(f'''<div style="padding:20px;background:linear-gradient(145deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.08);border-radius:16px;margin-bottom:14px;position:relative;overflow:hidden">
+<div style="position:absolute;top:0;left:0;width:100%;height:3px;background:linear-gradient(90deg,{risk_color},{risk_color}80,transparent)"></div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;margin-top:4px">
+<div style="font-size:15px;font-weight:700;color:#e8eaf0">{inst["name"]}{tax_html}</div>
+<div style="font-size:10px;color:{risk_color};font-family:DM Mono,monospace;background:{risk_color}15;padding:3px 8px;border-radius:4px">{inst["risk"]}</div>
+</div>
+<div style="font-size:11px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;margin-bottom:12px">{inst["type"]} · {inst.get("fund_house","")}</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px">
+<div style="text-align:center;padding:8px 4px;background:rgba(255,255,255,0.04);border-radius:8px"><div style="font-size:9px;color:rgba(255,255,255,0.3);font-family:DM Mono,monospace;letter-spacing:1px">1Y</div><div style="font-size:16px;font-weight:700;color:{r_colors[0]};margin-top:2px">{r1}</div></div>
+<div style="text-align:center;padding:8px 4px;background:rgba(255,255,255,0.04);border-radius:8px"><div style="font-size:9px;color:rgba(255,255,255,0.3);font-family:DM Mono,monospace;letter-spacing:1px">3Y</div><div style="font-size:16px;font-weight:700;color:{r_colors[1]};margin-top:2px">{r3}</div></div>
+<div style="text-align:center;padding:8px 4px;background:rgba(255,255,255,0.04);border-radius:8px"><div style="font-size:9px;color:rgba(255,255,255,0.3);font-family:DM Mono,monospace;letter-spacing:1px">5Y</div><div style="font-size:16px;font-weight:700;color:{r_colors[2]};margin-top:2px">{r5}</div></div>
+</div>
+<div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.5;margin-bottom:12px">{inst.get("description","")}</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">{link_btns}</div>
+</div>''', unsafe_allow_html=True)
             if MU_DISCLAIMER:
-                st.markdown(f'<div style="margin:16px 40px;padding:12px 16px;background:rgba(255,255,255,0.02);border-left:3px solid rgba(255,255,255,0.15);border-radius:4px"><span style="font-size:10px;color:rgba(255,255,255,0.3);font-family:DM Mono,monospace">⚖️ SEBI DISCLAIMER · {MU_DISCLAIMER}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="margin:20px 0;padding:14px 18px;background:rgba(255,255,255,0.02);border-left:3px solid rgba(255,255,255,0.1);border-radius:0 8px 8px 0"><span style="font-size:10px;color:rgba(255,255,255,0.25);font-family:DM Mono,monospace;line-height:1.6">&#9878; SEBI DISCLAIMER · {MU_DISCLAIMER}</span></div>', unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + TREND FORECAST + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
