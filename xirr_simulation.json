@@ -1,0 +1,47 @@
+{
+  "NIFTYBEES": {
+    "instrument": "NIFTYBEES",
+    "threshold": 10,
+    "months_simulated": 38,
+    "total_invested": 377865.05,
+    "total_units": 3713.6234,
+    "latest_nav": 281.93,
+    "current_value": 1046981.82,
+    "absolute_gain": 669116.77,
+    "xirr_pct": 13.02,
+    "vs_fd_delta": 334060.28,
+    "vs_inflation_delta": 398736.57,
+    "fd_value": 712921.54,
+    "years": 10.1
+  },
+  "JUNIORBEES": {
+    "instrument": "JUNIORBEES",
+    "threshold": 10,
+    "months_simulated": 38,
+    "total_invested": 377865.05,
+    "total_units": 1407.8379,
+    "latest_nav": 739.95,
+    "current_value": 1041729.71,
+    "absolute_gain": 663864.66,
+    "xirr_pct": 12.95,
+    "vs_fd_delta": 328808.17,
+    "vs_inflation_delta": 393484.46,
+    "fd_value": 712921.54,
+    "years": 10.1
+  },
+  "GOLDBEES": {
+    "instrument": "GOLDBEES",
+    "threshold": 10,
+    "months_simulated": 38,
+    "total_invested": 377865.05,
+    "total_units": 14005.6977,
+    "latest_nav": 138.32,
+    "current_value": 1937268.21,
+    "absolute_gain": 1559403.16,
+    "xirr_pct": 21.61,
+    "vs_fd_delta": 1224346.67,
+    "vs_inflation_delta": 1289022.96,
+    "fd_value": 712921.54,
+    "years": 10.1
+  }
+}
