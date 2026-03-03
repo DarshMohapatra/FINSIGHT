@@ -5,6 +5,5 @@ matplotlib
 scikit-learn
 groq
 plotly
-prophet
 pdfplumber
 openpyxl
