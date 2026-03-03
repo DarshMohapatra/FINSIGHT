@@ -1,0 +1,386 @@
+keyword,event_id,signal_strength,source
+tanishq,MARRIAGE,5,manual_seed
+malabar gold,MARRIAGE,5,manual_seed
+kalyan jewellers,MARRIAGE,5,manual_seed
+wedding,MARRIAGE,5,manual_seed
+shaadi,MARRIAGE,5,manual_seed
+vivah,MARRIAGE,5,manual_seed
+mehendi,MARRIAGE,5,manual_seed
+mandap,MARRIAGE,5,manual_seed
+sangeet,MARRIAGE,5,manual_seed
+baraat,MARRIAGE,5,manual_seed
+honeymoon,MARRIAGE,4,manual_seed
+bridal,MARRIAGE,4,manual_seed
+firstcry,BABY,5,manual_seed
+mothercare,BABY,5,manual_seed
+pampers,BABY,5,manual_seed
+maternity,BABY,5,manual_seed
+obstetric,BABY,5,manual_seed
+antenatal,BABY,5,manual_seed
+baby shower,BABY,5,manual_seed
+lactogen,BABY,5,manual_seed
+apollo cradle,BABY,5,manual_seed
+cloudnine,BABY,5,manual_seed
+stamp duty,HOME_PURCHASE,5,manual_seed
+subregistrar,HOME_PURCHASE,5,manual_seed
+possession,HOME_PURCHASE,5,manual_seed
+livspace,HOME_PURCHASE,4,manual_seed
+homelane,HOME_PURCHASE,4,manual_seed
+asian paints,HOME_PURCHASE,3,manual_seed
+token advance,HOME_PURCHASE,5,manual_seed
+booking amount,HOME_PURCHASE,5,manual_seed
+linkedin premium,JOB_SWITCH,5,manual_seed
+naukri,JOB_SWITCH,4,manual_seed
+full and final,JOB_SWITCH,5,manual_seed
+relieving,JOB_SWITCH,4,manual_seed
+pf withdrawal,JOB_SWITCH,4,manual_seed
+gratuity,JOB_SWITCH,4,manual_seed
+school fees,CHILD_SCHOOL,5,manual_seed
+admission fee,CHILD_SCHOOL,5,manual_seed
+tuition fee,CHILD_SCHOOL,5,manual_seed
+term fees,CHILD_SCHOOL,5,manual_seed
+byjus,CHILD_SCHOOL,4,manual_seed
+vedantu,CHILD_SCHOOL,4,manual_seed
+packers,RELOCATION,5,manual_seed
+movers,RELOCATION,5,manual_seed
+agarwal packers,RELOCATION,5,manual_seed
+society deposit,RELOCATION,5,manual_seed
+brokerage,RELOCATION,4,manual_seed
+advance rent,RELOCATION,4,manual_seed
+apollo hospital,MEDICAL_EVENT,5,manual_seed
+fortis,MEDICAL_EVENT,5,manual_seed
+max hospital,MEDICAL_EVENT,5,manual_seed
+medanta,MEDICAL_EVENT,5,manual_seed
+surgery,MEDICAL_EVENT,5,manual_seed
+discharge,MEDICAL_EVENT,4,manual_seed
+icu,MEDICAL_EVENT,5,manual_seed
+inpatient,MEDICAL_EVENT,5,manual_seed
+nps contribution,RETIREMENT_PREP,5,manual_seed
+ppf deposit,RETIREMENT_PREP,5,manual_seed
+pension premium,RETIREMENT_PREP,5,manual_seed
+scss,RETIREMENT_PREP,5,manual_seed
+annuity,RETIREMENT_PREP,4,manual_seed
+superannuation,RETIREMENT_PREP,4,manual_seed
+malabar,MARRIAGE,3,llm_generated
+wedding hall,MARRIAGE,3,llm_generated
+catering services,MARRIAGE,3,llm_generated
+venue booking,MARRIAGE,3,llm_generated
+firstcry,MARRIAGE,3,llm_generated
+apollo hospital,MARRIAGE,3,llm_generated
+agarwal packers,MARRIAGE,3,llm_generated
+mehndi artist,MARRIAGE,3,llm_generated
+wedding planner,MARRIAGE,3,llm_generated
+jewellery purchase,MARRIAGE,3,llm_generated
+pc jeweller,MARRIAGE,3,llm_generated
+honey moon,MARRIAGE,3,llm_generated
+travel booking,MARRIAGE,3,llm_generated
+yatra.com,MARRIAGE,3,llm_generated
+makemytrip,MARRIAGE,3,llm_generated
+cleartrip,MARRIAGE,3,llm_generated
+shaadi ka kharcha,MARRIAGE,3,llm_generated
+wedding expenses,MARRIAGE,3,llm_generated
+marriage hall,MARRIAGE,3,llm_generated
+catering bill,MARRIAGE,3,llm_generated
+decorator payment,MARRIAGE,3,llm_generated
+photographer fee,MARRIAGE,3,llm_generated
+dj booking,MARRIAGE,3,llm_generated
+mehendi payment,MARRIAGE,3,llm_generated
+sangeet ceremony,MARRIAGE,3,llm_generated
+wedding card printing,MARRIAGE,3,llm_generated
+gift purchase,MARRIAGE,3,llm_generated
+wedding shopping,MARRIAGE,3,llm_generated
+vivah samagri,MARRIAGE,3,llm_generated
+marriage registration,MARRIAGE,3,llm_generated
+court marriage fee,MARRIAGE,3,llm_generated
+me n mom,BABY,3,llm_generated
+apollo hospital,BABY,3,llm_generated
+max healthcare,BABY,3,llm_generated
+fortis hospital,BABY,3,llm_generated
+dawa,BABY,3,llm_generated
+bimar,BABY,3,llm_generated
+pharmacy,BABY,3,llm_generated
+baby store,BABY,3,llm_generated
+kids wear,BABY,3,llm_generated
+toys,BABY,3,llm_generated
+pregnancy test,BABY,3,llm_generated
+maternity hospital,BABY,3,llm_generated
+nan pro,BABY,3,llm_generated
+cerelac,BABY,3,llm_generated
+johnson baby,BABY,3,llm_generated
+hindmilk,BABY,3,llm_generated
+mama earth,BABY,3,llm_generated
+chicco,BABY,3,llm_generated
+huggies,BABY,3,llm_generated
+babyhug,BABY,3,llm_generated
+kidzee,BABY,3,llm_generated
+shishu,BABY,3,llm_generated
+bachcha,BABY,3,llm_generated
+nanhe,BABY,3,llm_generated
+baby care,BABY,3,llm_generated
+matritva,BABY,3,llm_generated
+garbhavati,BABY,3,llm_generated
+shishu seva,BABY,3,llm_generated
+baby bliss,BABY,3,llm_generated
+mummy and me,BABY,3,llm_generated
+baby on board,BABY,3,llm_generated
+new arrival,BABY,3,llm_generated
+little one,BABY,3,llm_generated
+baby love,BABY,3,llm_generated
+home loan,HOME_PURCHASE,3,llm_generated
+emi paid,HOME_PURCHASE,3,llm_generated
+property tax,HOME_PURCHASE,3,llm_generated
+registration fee,HOME_PURCHASE,3,llm_generated
+india bulls,HOME_PURCHASE,3,llm_generated
+lic housing,HOME_PURCHASE,3,llm_generated
+hdfc home,HOME_PURCHASE,3,llm_generated
+sbi home,HOME_PURCHASE,3,llm_generated
+icici home,HOME_PURCHASE,3,llm_generated
+mahindra homes,HOME_PURCHASE,3,llm_generated
+godrej properties,HOME_PURCHASE,3,llm_generated
+dlf limited,HOME_PURCHASE,3,llm_generated
+unitech homes,HOME_PURCHASE,3,llm_generated
+agarwal packers,HOME_PURCHASE,3,llm_generated
+urban ladder,HOME_PURCHASE,3,llm_generated
+pepperfry,HOME_PURCHASE,3,llm_generated
+home decor,HOME_PURCHASE,3,llm_generated
+interior design,HOME_PURCHASE,3,llm_generated
+modular kitchen,HOME_PURCHASE,3,llm_generated
+wardrobe design,HOME_PURCHASE,3,llm_generated
+makaan com,HOME_PURCHASE,3,llm_generated
+99acres,HOME_PURCHASE,3,llm_generated
+magicbricks,HOME_PURCHASE,3,llm_generated
+propertywala,HOME_PURCHASE,3,llm_generated
+housing com,HOME_PURCHASE,3,llm_generated
+common floor,HOME_PURCHASE,3,llm_generated
+naksha,HOME_PURCHASE,3,llm_generated
+griha pravesh,HOME_PURCHASE,3,llm_generated
+vastu shastra,HOME_PURCHASE,3,llm_generated
+greh pravesh,HOME_PURCHASE,3,llm_generated
+new home,HOME_PURCHASE,3,llm_generated
+house warming,HOME_PURCHASE,3,llm_generated
+grih pravesh,HOME_PURCHASE,3,llm_generated
+flat registration,HOME_PURCHASE,3,llm_generated
+plot purchase,HOME_PURCHASE,3,llm_generated
+bhk flat,HOME_PURCHASE,3,llm_generated
+salary transfer,JOB_SWITCH,3,llm_generated
+new job,JOB_SWITCH,3,llm_generated
+career change,JOB_SWITCH,3,llm_generated
+professional fee,JOB_SWITCH,3,llm_generated
+upskilling course,JOB_SWITCH,3,llm_generated
+niit payment,JOB_SWITCH,3,llm_generated
+coursera fee,JOB_SWITCH,3,llm_generated
+edureka payment,JOB_SWITCH,3,llm_generated
+timespro fee,JOB_SWITCH,3,llm_generated
+career transition,JOB_SWITCH,3,llm_generated
+job switch,JOB_SWITCH,3,llm_generated
+placement fee,JOB_SWITCH,3,llm_generated
+recruiter payment,JOB_SWITCH,3,llm_generated
+headhunter fee,JOB_SWITCH,3,llm_generated
+resume service,JOB_SWITCH,3,llm_generated
+interview prep,JOB_SWITCH,3,llm_generated
+career counseling,JOB_SWITCH,3,llm_generated
+professional cert,JOB_SWITCH,3,llm_generated
+exam fee,JOB_SWITCH,3,llm_generated
+lic jeevan,JOB_SWITCH,3,llm_generated
+max life insurance,JOB_SWITCH,3,llm_generated
+hdfc life premium,JOB_SWITCH,3,llm_generated
+icici pru life,JOB_SWITCH,3,llm_generated
+sbi life payment,JOB_SWITCH,3,llm_generated
+income tax,JOB_SWITCH,3,llm_generated
+tds payment,JOB_SWITCH,3,llm_generated
+gst payment,JOB_SWITCH,3,llm_generated
+professional tax,JOB_SWITCH,3,llm_generated
+naukri com,JOB_SWITCH,3,llm_generated
+indeed payment,JOB_SWITCH,3,llm_generated
+glassdoor fee,JOB_SWITCH,3,llm_generated
+shine com payment,JOB_SWITCH,3,llm_generated
+timesjobs fee,JOB_SWITCH,3,llm_generated
+monster india,JOB_SWITCH,3,llm_generated
+careerbuilder payment,JOB_SWITCH,3,llm_generated
+school fee,CHILD_SCHOOL,3,llm_generated
+education loan,CHILD_SCHOOL,3,llm_generated
+byju's,CHILD_SCHOOL,3,llm_generated
+unacademy,CHILD_SCHOOL,3,llm_generated
+career launcher,CHILD_SCHOOL,3,llm_generated
+fiitjee,CHILD_SCHOOL,3,llm_generated
+school admission,CHILD_SCHOOL,3,llm_generated
+class fee,CHILD_SCHOOL,3,llm_generated
+exam fee,CHILD_SCHOOL,3,llm_generated
+library fee,CHILD_SCHOOL,3,llm_generated
+lab fee,CHILD_SCHOOL,3,llm_generated
+bus fee,CHILD_SCHOOL,3,llm_generated
+hostel fee,CHILD_SCHOOL,3,llm_generated
+mess fee,CHILD_SCHOOL,3,llm_generated
+nursery admission,CHILD_SCHOOL,3,llm_generated
+kg admission,CHILD_SCHOOL,3,llm_generated
+school deposit,CHILD_SCHOOL,3,llm_generated
+education expense,CHILD_SCHOOL,3,llm_generated
+fee payment,CHILD_SCHOOL,3,llm_generated
+online course,CHILD_SCHOOL,3,llm_generated
+coursera,CHILD_SCHOOL,3,llm_generated
+udemy,CHILD_SCHOOL,3,llm_generated
+scholarship,CHILD_SCHOOL,3,llm_generated
+education loan emi,CHILD_SCHOOL,3,llm_generated
+school donation,CHILD_SCHOOL,3,llm_generated
+ptm fee,CHILD_SCHOOL,3,llm_generated
+extra curricular,CHILD_SCHOOL,3,llm_generated
+activity fee,CHILD_SCHOOL,3,llm_generated
+sports fee,CHILD_SCHOOL,3,llm_generated
+music fee,CHILD_SCHOOL,3,llm_generated
+dance fee,CHILD_SCHOOL,3,llm_generated
+art fee,CHILD_SCHOOL,3,llm_generated
+packers movers,RELOCATION,3,llm_generated
+movers and packers,RELOCATION,3,llm_generated
+relocation services,RELOCATION,3,llm_generated
+house shifting,RELOCATION,3,llm_generated
+new home,RELOCATION,3,llm_generated
+home setup,RELOCATION,3,llm_generated
+brokerage payment,RELOCATION,3,llm_generated
+rent agreement,RELOCATION,3,llm_generated
+security deposit,RELOCATION,3,llm_generated
+lease payment,RELOCATION,3,llm_generated
+moving services,RELOCATION,3,llm_generated
+transport charges,RELOCATION,3,llm_generated
+logistics fee,RELOCATION,3,llm_generated
+packing materials,RELOCATION,3,llm_generated
+relocation charges,RELOCATION,3,llm_generated
+new address,RELOCATION,3,llm_generated
+change of address,RELOCATION,3,llm_generated
+address update,RELOCATION,3,llm_generated
+home decor,RELOCATION,3,llm_generated
+furniture purchase,RELOCATION,3,llm_generated
+electronic store,RELOCATION,3,llm_generated
+croma,RELOCATION,3,llm_generated
+reliance digital,RELOCATION,3,llm_generated
+viveks,RELOCATION,3,llm_generated
+home appliances,RELOCATION,3,llm_generated
+kitchen setup,RELOCATION,3,llm_generated
+bed and bath,RELOCATION,3,llm_generated
+home furnishings,RELOCATION,3,llm_generated
+ikea,RELOCATION,3,llm_generated
+hometown,RELOCATION,3,llm_generated
+relocation expense,RELOCATION,3,llm_generated
+moving expense,RELOCATION,3,llm_generated
+packers and movers bill,RELOCATION,3,llm_generated
+relocation bill,RELOCATION,3,llm_generated
+new house,RELOCATION,3,llm_generated
+griha pravesh,RELOCATION,3,llm_generated
+house warming,RELOCATION,3,llm_generated
+new home setup,RELOCATION,3,llm_generated
+fortis hospital,MEDICAL_EVENT,3,llm_generated
+medanta hospital,MEDICAL_EVENT,3,llm_generated
+pharmacy,MEDICAL_EVENT,3,llm_generated
+dawa,MEDICAL_EVENT,3,llm_generated
+bimar,MEDICAL_EVENT,3,llm_generated
+medical bill,MEDICAL_EVENT,3,llm_generated
+hospital bill,MEDICAL_EVENT,3,llm_generated
+operation,MEDICAL_EVENT,3,llm_generated
+doctor fee,MEDICAL_EVENT,3,llm_generated
+consultation fee,MEDICAL_EVENT,3,llm_generated
+lab test,MEDICAL_EVENT,3,llm_generated
+diagnostic centre,MEDICAL_EVENT,3,llm_generated
+pathology lab,MEDICAL_EVENT,3,llm_generated
+dr lal path lab,MEDICAL_EVENT,3,llm_generated
+srl diagnostics,MEDICAL_EVENT,3,llm_generated
+metropolis lab,MEDICAL_EVENT,3,llm_generated
+medicine purchase,MEDICAL_EVENT,3,llm_generated
+medical store,MEDICAL_EVENT,3,llm_generated
+chemist,MEDICAL_EVENT,3,llm_generated
+pharmeasy,MEDICAL_EVENT,3,llm_generated
+1mg,MEDICAL_EVENT,3,llm_generated
+netmeds,MEDICAL_EVENT,3,llm_generated
+hosp bill,MEDICAL_EVENT,3,llm_generated
+med claim,MEDICAL_EVENT,3,llm_generated
+health insurance,MEDICAL_EVENT,3,llm_generated
+medical emergency,MEDICAL_EVENT,3,llm_generated
+accident bill,MEDICAL_EVENT,3,llm_generated
+icu bill,MEDICAL_EVENT,3,llm_generated
+ot bill,MEDICAL_EVENT,3,llm_generated
+operation theatre,MEDICAL_EVENT,3,llm_generated
+doctor consultation,MEDICAL_EVENT,3,llm_generated
+hospital admission,MEDICAL_EVENT,3,llm_generated
+discharge bill,MEDICAL_EVENT,3,llm_generated
+nps,RETIREMENT_PREP,3,llm_generated
+ppf,RETIREMENT_PREP,3,llm_generated
+pension,RETIREMENT_PREP,3,llm_generated
+retirement investment,RETIREMENT_PREP,3,llm_generated
+lic pension,RETIREMENT_PREP,3,llm_generated
+hdfc pension,RETIREMENT_PREP,3,llm_generated
+icici pru,RETIREMENT_PREP,3,llm_generated
+sbi life,RETIREMENT_PREP,3,llm_generated
+uti nps,RETIREMENT_PREP,3,llm_generated
+franklin retirement,RETIREMENT_PREP,3,llm_generated
+birla sun life,RETIREMENT_PREP,3,llm_generated
+max life insurance,RETIREMENT_PREP,3,llm_generated
+pension fund,RETIREMENT_PREP,3,llm_generated
+retirement plan,RETIREMENT_PREP,3,llm_generated
+investment for retirement,RETIREMENT_PREP,3,llm_generated
+senior citizen,RETIREMENT_PREP,3,llm_generated
+vridha pension,RETIREMENT_PREP,3,llm_generated
+bima yojana,RETIREMENT_PREP,3,llm_generated
+ayushman bharat,RETIREMENT_PREP,3,llm_generated
+health insurance,RETIREMENT_PREP,3,llm_generated
+mediclaim,RETIREMENT_PREP,3,llm_generated
+dawa,RETIREMENT_PREP,3,llm_generated
+bimar,RETIREMENT_PREP,3,llm_generated
+apollo hospital,RETIREMENT_PREP,3,llm_generated
+fortis hospital,RETIREMENT_PREP,3,llm_generated
+max healthcare,RETIREMENT_PREP,3,llm_generated
+senior care,RETIREMENT_PREP,3,llm_generated
+old age home,RETIREMENT_PREP,3,llm_generated
+vridha ashram,RETIREMENT_PREP,3,llm_generated
+retirement home,RETIREMENT_PREP,3,llm_generated
+pension payment,RETIREMENT_PREP,3,llm_generated
+lic premium,RETIREMENT_PREP,3,llm_generated
+investment in nps,RETIREMENT_PREP,3,llm_generated
+retirement savings,RETIREMENT_PREP,3,llm_generated
+"precious stones and metals, watches and jewelry",MARRIAGE,2,mcc_description
+"watch, clock, jewelry, and silverware stores",MARRIAGE,2,mcc_description
+"lodging – hotels, motels, resorts, central reservation services (not elsewhere classified)",MARRIAGE,2,mcc_description
+"theatrical producers (except motion pictures), ticket agencies",MARRIAGE,2,mcc_description
+men’s and women’s clothing stores,MARRIAGE,2,mcc_description
+caterers,MARRIAGE,2,mcc_description
+eating places and restaurants,MARRIAGE,2,mcc_description
+"photofinishing laboratories, photo developing",MARRIAGE,2,mcc_description
+travel agencies and tour operations,MARRIAGE,2,mcc_description
+miscellaneous personal services ( not elsewhere classifies),MARRIAGE,2,mcc_description
+miscellaneous and specialty retail stores,BABY,2,mcc_description
+podiatrists and chiropodists,BABY,2,mcc_description
+medical services and health practitioners (not elsewhere classified),BABY,2,mcc_description
+doctors and physicians (not elsewhere classified),BABY,2,mcc_description
+drug stores and pharmacies,BABY,2,mcc_description
+hospitals,BABY,2,mcc_description
+children’s and infant’s wear stores,BABY,2,mcc_description
+unknown,BABY,2,mcc_description
+general contractors-residential and commercial,HOME_PURCHASE,2,mcc_description
+electrical contractors,HOME_PURCHASE,2,mcc_description
+"insulation – contractors, masonry, stonework contractors, plastering contractors, stonework and masonry contractors, tile settings contractors",HOME_PURCHASE,2,mcc_description
+carpentry contractors,HOME_PURCHASE,2,mcc_description
+lumber and building materials stores,HOME_PURCHASE,2,mcc_description
+"furniture, home furnishings, and equipment stores, exceptappliances",HOME_PURCHASE,2,mcc_description
+floor covering stores,HOME_PURCHASE,2,mcc_description
+unknown,HOME_PURCHASE,2,mcc_description
+"motor freight carriers, moving and storage companies, trucking – local/long distance, delivery services – local",HOME_PURCHASE,2,mcc_description
+"computer programming, integrated systems design and data processing services",JOB_SWITCH,2,mcc_description
+vocational schools and trade schools,JOB_SWITCH,2,mcc_description
+schools and educational services ( not elsewhere classified),JOB_SWITCH,2,mcc_description
+men’s and women’s clothing stores,JOB_SWITCH,2,mcc_description
+"stationery stores, office and school supply stores",JOB_SWITCH,2,mcc_description
+elementary and secondary schools,CHILD_SCHOOL,2,mcc_description
+"colleges, junior colleges, universities, and professionalschools",CHILD_SCHOOL,2,mcc_description
+schools and educational services ( not elsewhere classified),CHILD_SCHOOL,2,mcc_description
+vocational schools and trade schools,CHILD_SCHOOL,2,mcc_description
+"stationery stores, office and school supply stores",CHILD_SCHOOL,2,mcc_description
+"hobby, toy, and game shops",CHILD_SCHOOL,2,mcc_description
+"motor freight carriers, moving and storage companies, trucking – local/long distance, delivery services – local",RELOCATION,2,mcc_description
+"cleaning and maintenance, janitorial services",RELOCATION,2,mcc_description
+real estate agents and managers - rentals,RELOCATION,2,mcc_description
+"electric, gas, sanitary and water utilities",RELOCATION,2,mcc_description
+electrical parts and equipment,RELOCATION,2,mcc_description
+doctors and physicians (not elsewhere classified),MEDICAL_EVENT,2,mcc_description
+osteopaths,MEDICAL_EVENT,2,mcc_description
+hospitals,MEDICAL_EVENT,2,mcc_description
+medical services and health practitioners (not elsewhere classified),MEDICAL_EVENT,2,mcc_description
+drug stores and pharmacies,MEDICAL_EVENT,2,mcc_description
+unknown,MEDICAL_EVENT,2,mcc_description
+unknown,RETIREMENT_PREP,2,mcc_description
