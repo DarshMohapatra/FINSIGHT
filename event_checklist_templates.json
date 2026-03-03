@@ -1,0 +1,547 @@
+[
+  {
+    "event_id": "MARRIAGE",
+    "timeline_months": 12,
+    "corpus_estimate": "20-30% of annual income for wedding + 3 months expenses as buffer",
+    "corpus_formula": "annual_income * 0.25",
+    "checklist_items": [
+      {
+        "priority": 1,
+        "category": "Banking",
+        "action": "Open joint bank account with partner",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Insurance",
+        "action": "Switch to family floater health insurance (min \u20b910L cover)",
+        "deadline_months": 2
+      },
+      {
+        "priority": 1,
+        "category": "Legal",
+        "action": "Update nominee on all FDs, MFs, insurance policies",
+        "deadline_months": 2
+      },
+      {
+        "priority": 2,
+        "category": "Investment",
+        "action": "Consolidate duplicate MF folios into joint holding",
+        "deadline_months": 3
+      },
+      {
+        "priority": 2,
+        "category": "Tax",
+        "action": "Understand gift tax implications \u2014 gifts from relatives exempt",
+        "deadline_months": 1
+      },
+      {
+        "priority": 2,
+        "category": "Insurance",
+        "action": "Review term insurance \u2014 add partner as beneficiary",
+        "deadline_months": 3
+      },
+      {
+        "priority": 3,
+        "category": "Planning",
+        "action": "Create joint budget for first year of marriage",
+        "deadline_months": 1
+      },
+      {
+        "priority": 3,
+        "category": "Legal",
+        "action": "Draft/update Will post marriage",
+        "deadline_months": 6
+      },
+      {
+        "priority": 3,
+        "category": "Investment",
+        "action": "Start SIP for first home down payment",
+        "deadline_months": 3
+      },
+      {
+        "priority": 3,
+        "category": "Tax",
+        "action": "File returns separately \u2014 assess HUF formation benefit",
+        "deadline_months": 12
+      }
+    ],
+    "insurance_gaps": [
+      "Family floater health insurance",
+      "Term life insurance for both",
+      "Personal accident cover"
+    ],
+    "legal_steps": [
+      "Nominee updates",
+      "Will update",
+      "Address change on Aadhaar/PAN if applicable"
+    ]
+  },
+  {
+    "event_id": "BABY",
+    "timeline_months": 9,
+    "corpus_estimate": "\u20b93-5L for delivery + \u20b91L/year first 3 years + education corpus SIP",
+    "corpus_formula": "300000 + (child_age_years * 120000)",
+    "checklist_items": [
+      {
+        "priority": 1,
+        "category": "Insurance",
+        "action": "Add newborn to family floater within 90 days of birth",
+        "deadline_months": 3
+      },
+      {
+        "priority": 1,
+        "category": "Legal",
+        "action": "Add child as nominee after birth certificate issued",
+        "deadline_months": 2
+      },
+      {
+        "priority": 1,
+        "category": "Investment",
+        "action": "Start Sukanya Samriddhi Yojana (girl child) or PPF (boy child)",
+        "deadline_months": 6
+      },
+      {
+        "priority": 1,
+        "category": "Planning",
+        "action": "Top up emergency fund to 9 months expenses",
+        "deadline_months": 3
+      },
+      {
+        "priority": 2,
+        "category": "Insurance",
+        "action": "Buy child term plan / critical illness rider",
+        "deadline_months": 6
+      },
+      {
+        "priority": 2,
+        "category": "Investment",
+        "action": "Start \u20b95K/month SIP for 18-year education corpus",
+        "deadline_months": 3
+      },
+      {
+        "priority": 2,
+        "category": "Tax",
+        "action": "Claim maternity/medical expenses under 80D",
+        "deadline_months": 12
+      },
+      {
+        "priority": 3,
+        "category": "Legal",
+        "action": "Update Will to include child",
+        "deadline_months": 6
+      },
+      {
+        "priority": 3,
+        "category": "Planning",
+        "action": "Plan maternity/paternity leave income gap",
+        "deadline_months": 1
+      }
+    ],
+    "insurance_gaps": [
+      "Child health cover added to floater",
+      "Critical illness for parents",
+      "Term insurance increase"
+    ],
+    "legal_steps": [
+      "Nominee update post birth",
+      "Will update",
+      "Aadhaar enrollment for child"
+    ]
+  },
+  {
+    "event_id": "HOME_PURCHASE",
+    "timeline_months": 6,
+    "corpus_estimate": "EMI should be < 40% of take-home. Keep 6-month EMI buffer liquid.",
+    "corpus_formula": "property_value * 0.20",
+    "checklist_items": [
+      {
+        "priority": 1,
+        "category": "Insurance",
+        "action": "Buy home loan term insurance = outstanding loan amount",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Insurance",
+        "action": "Home structure insurance (fire + flood + earthquake)",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Planning",
+        "action": "EMI stress test: can you pay EMI for 6 months without income?",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Tax",
+        "action": "Register for 80C (principal) + 24B (interest) deductions",
+        "deadline_months": 2
+      },
+      {
+        "priority": 2,
+        "category": "Legal",
+        "action": "Verify property title \u2014 hire independent lawyer",
+        "deadline_months": 1
+      },
+      {
+        "priority": 2,
+        "category": "Legal",
+        "action": "Check for encumbrances / litigation on property",
+        "deadline_months": 1
+      },
+      {
+        "priority": 2,
+        "category": "Banking",
+        "action": "Keep 6 months EMI in liquid fund as buffer",
+        "deadline_months": 2
+      },
+      {
+        "priority": 3,
+        "category": "Tax",
+        "action": "Track all home improvement expenses for cost basis",
+        "deadline_months": 6
+      },
+      {
+        "priority": 3,
+        "category": "Investment",
+        "action": "Pause SIPs temporarily for down payment \u2014 resume within 6 months",
+        "deadline_months": 6
+      }
+    ],
+    "insurance_gaps": [
+      "Home loan cover (term)",
+      "Home structure insurance",
+      "Content insurance"
+    ],
+    "legal_steps": [
+      "Title verification",
+      "Encumbrance certificate",
+      "Sale deed registration",
+      "Khata transfer"
+    ]
+  },
+  {
+    "event_id": "JOB_SWITCH",
+    "timeline_months": 3,
+    "corpus_estimate": "Keep 3 months salary liquid before switching. Budget for joining gap.",
+    "corpus_formula": "monthly_salary * 3",
+    "checklist_items": [
+      {
+        "priority": 1,
+        "category": "Banking",
+        "action": "Transfer PF using Form 13 within 60 days",
+        "deadline_months": 2
+      },
+      {
+        "priority": 1,
+        "category": "Tax",
+        "action": "Collect Form 16 from old employer before leaving",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Tax",
+        "action": "Declare previous employer salary to new employer (Form 12B)",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Insurance",
+        "action": "Port or buy individual health insurance \u2014 don't rely on new employer",
+        "deadline_months": 1
+      },
+      {
+        "priority": 2,
+        "category": "Legal",
+        "action": "Claim gratuity if tenure > 5 years",
+        "deadline_months": 1
+      },
+      {
+        "priority": 2,
+        "category": "Banking",
+        "action": "Update salary account / ECS mandates",
+        "deadline_months": 1
+      },
+      {
+        "priority": 2,
+        "category": "Tax",
+        "action": "File ITR with both Form 16s \u2014 declare all income",
+        "deadline_months": 12
+      },
+      {
+        "priority": 3,
+        "category": "Investment",
+        "action": "Review and increase SIP with new higher salary",
+        "deadline_months": 2
+      }
+    ],
+    "insurance_gaps": [
+      "Individual health insurance (not employer-dependent)",
+      "Personal accident cover"
+    ],
+    "legal_steps": [
+      "PF transfer Form 13",
+      "Gratuity claim",
+      "ESOP tax planning if applicable"
+    ]
+  },
+  {
+    "event_id": "CHILD_SCHOOL",
+    "timeline_months": 12,
+    "corpus_estimate": "\u20b915-80L for private school over 12 years. Start SIP immediately.",
+    "corpus_formula": "annual_fees * 14 * 1.10",
+    "checklist_items": [
+      {
+        "priority": 1,
+        "category": "Investment",
+        "action": "Start education SIP \u2014 target 15x current annual fees by college",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Tax",
+        "action": "Claim tuition fee deduction under 80C (up to \u20b91.5L)",
+        "deadline_months": 12
+      },
+      {
+        "priority": 2,
+        "category": "Insurance",
+        "action": "Increase term insurance to cover education costs",
+        "deadline_months": 2
+      },
+      {
+        "priority": 2,
+        "category": "Investment",
+        "action": "Open Sukanya Samriddhi for girl child if not done",
+        "deadline_months": 1
+      },
+      {
+        "priority": 2,
+        "category": "Planning",
+        "action": "Budget for annual fee hikes (typically 8-12% per year)",
+        "deadline_months": 1
+      },
+      {
+        "priority": 3,
+        "category": "Investment",
+        "action": "Consider child ULIP only if lock-in matches college timeline",
+        "deadline_months": 3
+      }
+    ],
+    "insurance_gaps": [
+      "Term insurance increase",
+      "Child health cover"
+    ],
+    "legal_steps": [
+      "Nominee update if not done",
+      "Education loan pre-approval research"
+    ]
+  },
+  {
+    "event_id": "RELOCATION",
+    "timeline_months": 2,
+    "corpus_estimate": "Budget \u20b950K-2L for moving + 3 months rent advance + utility deposits.",
+    "corpus_formula": "monthly_rent * 3 + 75000",
+    "checklist_items": [
+      {
+        "priority": 1,
+        "category": "Legal",
+        "action": "Update Aadhaar address within 30 days",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Legal",
+        "action": "Update PAN address with Income Tax portal",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Banking",
+        "action": "Update address on all bank accounts and credit cards",
+        "deadline_months": 1
+      },
+      {
+        "priority": 2,
+        "category": "Legal",
+        "action": "Transfer Voter ID to new constituency",
+        "deadline_months": 2
+      },
+      {
+        "priority": 2,
+        "category": "Legal",
+        "action": "Update vehicle RC address at RTO",
+        "deadline_months": 2
+      },
+      {
+        "priority": 2,
+        "category": "Insurance",
+        "action": "Update address on all insurance policies",
+        "deadline_months": 1
+      },
+      {
+        "priority": 3,
+        "category": "Planning",
+        "action": "Map new city emergency contacts \u2014 hospitals, police",
+        "deadline_months": 1
+      },
+      {
+        "priority": 3,
+        "category": "Tax",
+        "action": "HRA claim \u2014 ensure rent receipts from new address",
+        "deadline_months": 3
+      }
+    ],
+    "insurance_gaps": [
+      "Renter's insurance for contents",
+      "Vehicle insurance address update"
+    ],
+    "legal_steps": [
+      "Aadhaar update",
+      "PAN update",
+      "Voter ID transfer",
+      "RC address change"
+    ]
+  },
+  {
+    "event_id": "MEDICAL_EVENT",
+    "timeline_months": 3,
+    "corpus_estimate": "Replenish emergency fund first. Review health cover adequacy post-event.",
+    "corpus_formula": "monthly_expenses * 6",
+    "checklist_items": [
+      {
+        "priority": 1,
+        "category": "Insurance",
+        "action": "File health insurance claim immediately \u2014 don't delay",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Planning",
+        "action": "Create income continuity plan for recovery period",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Planning",
+        "action": "Replenish emergency fund post-treatment",
+        "deadline_months": 6
+      },
+      {
+        "priority": 2,
+        "category": "Insurance",
+        "action": "Review critical illness cover \u2014 upgrade if inadequate",
+        "deadline_months": 3
+      },
+      {
+        "priority": 2,
+        "category": "Insurance",
+        "action": "Check if employer disability insurance covers your condition",
+        "deadline_months": 1
+      },
+      {
+        "priority": 2,
+        "category": "Tax",
+        "action": "Claim medical expenses under 80D / 80DDB as applicable",
+        "deadline_months": 12
+      },
+      {
+        "priority": 3,
+        "category": "Legal",
+        "action": "Create healthcare power of attorney and living will",
+        "deadline_months": 3
+      },
+      {
+        "priority": 3,
+        "category": "Investment",
+        "action": "Pause non-essential SIPs during treatment \u2014 resume after",
+        "deadline_months": 3
+      }
+    ],
+    "insurance_gaps": [
+      "Critical illness cover",
+      "Disability income insurance",
+      "Top-up health cover"
+    ],
+    "legal_steps": [
+      "Healthcare POA",
+      "Living will / advance directive",
+      "Nominee audit"
+    ]
+  },
+  {
+    "event_id": "RETIREMENT_PREP",
+    "timeline_months": 60,
+    "corpus_estimate": "Target 25x annual expenses. At \u20b960K/month expenses = \u20b91.8Cr minimum.",
+    "corpus_formula": "annual_expenses * 25",
+    "checklist_items": [
+      {
+        "priority": 1,
+        "category": "Investment",
+        "action": "Calculate retirement corpus target (25x annual expenses rule)",
+        "deadline_months": 1
+      },
+      {
+        "priority": 1,
+        "category": "Investment",
+        "action": "Maximise NPS Tier 1 \u2014 extra \u20b950K deduction under 80CCD(1B)",
+        "deadline_months": 2
+      },
+      {
+        "priority": 1,
+        "category": "Insurance",
+        "action": "Buy health insurance independent of employer \u2014 cover till age 80",
+        "deadline_months": 2
+      },
+      {
+        "priority": 2,
+        "category": "Investment",
+        "action": "Set up SWP (Systematic Withdrawal Plan) for post-retirement income",
+        "deadline_months": 12
+      },
+      {
+        "priority": 2,
+        "category": "Legal",
+        "action": "Write or update Will \u2014 include all assets",
+        "deadline_months": 3
+      },
+      {
+        "priority": 2,
+        "category": "Legal",
+        "action": "Audit all nominees across MFs, FDs, insurance, EPF",
+        "deadline_months": 2
+      },
+      {
+        "priority": 3,
+        "category": "Tax",
+        "action": "Plan tax-efficient withdrawal sequence (NPS \u2192 MF \u2192 FD)",
+        "deadline_months": 12
+      },
+      {
+        "priority": 3,
+        "category": "Planning",
+        "action": "Create retirement budget \u2014 fixed vs variable expenses",
+        "deadline_months": 6
+      },
+      {
+        "priority": 3,
+        "category": "Investment",
+        "action": "Shift equity:debt ratio to 40:60 as retirement approaches",
+        "deadline_months": 24
+      }
+    ],
+    "insurance_gaps": [
+      "Individual health insurance to 80",
+      "Critical illness cover",
+      "Annuity product research"
+    ],
+    "legal_steps": [
+      "Will creation/update",
+      "Nominee audit",
+      "Power of attorney setup",
+      "Locker nomination"
+    ]
+  }
+]
