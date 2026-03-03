@@ -1023,23 +1023,74 @@ else:
 
 
     with tab6:
-        st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 17 — MICROROUNDUP</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💰 MicroRoundUp India</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Round up every transaction to the nearest ₹10/₹50/₹100. Invest the spare change into Nifty ETF, Gold, or ELSS. Watch it compound.</div></div>', unsafe_allow_html=True)
+        st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 2 — MICROROUNDUP</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💰 MicroRoundUp India</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Round up every transaction to the nearest ₹10/₹50/₹100. Invest the spare change into Nifty ETF, Gold, or ELSS. Watch it compound.</div></div>', unsafe_allow_html=True)
         if st.session_state.get("user_df") is None:
             st.info("Upload your bank statement in the UPLOAD tab first.")
         else:
             df_mu = st.session_state["user_df"]
-            mc1, mc2, mc3 = st.columns([1,1,1])
-            threshold = mc1.radio("Round-up threshold", [10, 50, 100],
-                format_func=lambda x: f"₹{x} per transaction",
-                horizontal=False, key="mu_threshold")
+            # --- Threshold selector (hidden radio for state) ---
+            _thr_cols = st.columns([1,1,1,3])
+            threshold = 10  # default
+            if "mu_threshold" not in st.session_state:
+                st.session_state["mu_threshold"] = 10
+            with _thr_cols[0]:
+                if st.button("₹10", key="mu_btn10", use_container_width=True):
+                    st.session_state["mu_threshold"] = 10
+            with _thr_cols[1]:
+                if st.button("₹50", key="mu_btn50", use_container_width=True):
+                    st.session_state["mu_threshold"] = 50
+            with _thr_cols[2]:
+                if st.button("₹100", key="mu_btn100", use_container_width=True):
+                    st.session_state["mu_threshold"] = 100
+            threshold = st.session_state["mu_threshold"]
+            # Style the active button
+            active_btn_css = f"""<style>
+            div[data-testid="stHorizontalBlock"] button {{
+                background: rgba(255,255,255,0.04) !important;
+                border: 1px solid rgba(255,255,255,0.1) !important;
+                color: rgba(255,255,255,0.5) !important;
+                border-radius: 10px !important;
+                font-family: 'DM Mono', monospace !important;
+                font-size: 13px !important;
+                font-weight: 600 !important;
+                padding: 8px 0 !important;
+                transition: all 0.2s !important;
+            }}
+            div[data-testid="stHorizontalBlock"] button:hover {{
+                border-color: #00f5a0 !important;
+                color: #00f5a0 !important;
+            }}
+            </style>"""
+            st.markdown(active_btn_css, unsafe_allow_html=True)
+            st.markdown(f'<div style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:1px;margin:-8px 0 16px 4px">ROUND-UP THRESHOLD · <span style="color:#00f5a0;font-weight:700">₹{threshold}</span> PER TRANSACTION</div>', unsafe_allow_html=True)
             df_rw, monthly_ru = mu_compute_roundups(df_mu, threshold)
             total_corpus  = float(df_rw["ROUNDUP"].sum())
             monthly_avg   = total_corpus / max(len(monthly_ru), 1)
             total_txns    = len(df_rw)
-            mc2.metric("Total Round-Up Corpus", f"₹{total_corpus:,.0f}")
-            mc2.metric("Monthly Average", f"₹{monthly_avg:,.0f}")
-            mc3.metric("Transactions Rounded", f"{total_txns:,}")
-            mc3.metric("Avg per Transaction", f"₹{total_corpus/max(total_txns,1):.1f}")
+            avg_per_txn   = total_corpus / max(total_txns, 1)
+            # --- Styled metric cards ---
+            st.markdown(f'''<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:24px">
+<div style="padding:20px;background:linear-gradient(145deg,rgba(0,245,160,0.08),rgba(0,245,160,0.02));border:1px solid rgba(0,245,160,0.15);border-radius:14px">
+<div style="font-size:10px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:1.5px;margin-bottom:8px">TOTAL CORPUS</div>
+<div style="font-size:28px;font-weight:800;color:#00f5a0;letter-spacing:-0.5px">₹{total_corpus:,.0f}</div>
+<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px">spare change captured</div>
+</div>
+<div style="padding:20px;background:linear-gradient(145deg,rgba(0,212,255,0.08),rgba(0,212,255,0.02));border:1px solid rgba(0,212,255,0.15);border-radius:14px">
+<div style="font-size:10px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:1.5px;margin-bottom:8px">MONTHLY AVG</div>
+<div style="font-size:28px;font-weight:800;color:#00d4ff;letter-spacing:-0.5px">₹{monthly_avg:,.0f}</div>
+<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px">per month</div>
+</div>
+<div style="padding:20px;background:linear-gradient(145deg,rgba(245,158,11,0.08),rgba(245,158,11,0.02));border:1px solid rgba(245,158,11,0.15);border-radius:14px">
+<div style="font-size:10px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:1.5px;margin-bottom:8px">TRANSACTIONS</div>
+<div style="font-size:28px;font-weight:800;color:#f59e0b;letter-spacing:-0.5px">{total_txns:,}</div>
+<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px">rounded up</div>
+</div>
+<div style="padding:20px;background:linear-gradient(145deg,rgba(168,85,247,0.08),rgba(168,85,247,0.02));border:1px solid rgba(168,85,247,0.15);border-radius:14px">
+<div style="font-size:10px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:1.5px;margin-bottom:8px">AVG / TXN</div>
+<div style="font-size:28px;font-weight:800;color:#a855f7;letter-spacing:-0.5px">₹{avg_per_txn:.1f}</div>
+<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px">per transaction</div>
+</div>
+</div>''', unsafe_allow_html=True)
             st.markdown('<div style="margin:24px 40px 8px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">MONTHLY ROUND-UP CORPUS</div>', unsafe_allow_html=True)
             import plotly.graph_objects as go
             fig_bar = go.Figure()
