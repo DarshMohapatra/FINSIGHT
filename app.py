@@ -88,128 +88,6 @@ SC_CMAP = {
     "Healthcare":"Healthcare", "Entertainment":"Entertainment",
     "Utility":"Utility", "Salary":"Other", "Other":"Other"}
 
-# ── LifeEvent Radar globals ──────────────────────────────────
-import re as _re, datetime as _dt
-
-@st.cache_data(ttl=86400)
-def load_le_databases():
-    _b = "https://raw.githubusercontent.com/DarshMohapatra/FINSIGHT/main/"
-    def _gj(f):
-        try:
-            with _scu.urlopen(_b+f, timeout=8) as resp: return _scj.load(resp)
-        except Exception: return []
-    def _gc(f):
-        try:
-            import io, csv
-            with _scu.urlopen(_b+f, timeout=8) as resp:
-                content = resp.read().decode("utf-8")
-            reader = csv.DictReader(io.StringIO(content))
-            return list(reader)
-        except Exception: return []
-    sigs      = _gj("life_event_signatures.json")
-    checklists= _gj("event_checklist_templates.json")
-    merchants = _gc("merchant_event_map.csv")
-    return sigs, checklists, merchants
-
-LE_SIGS, LE_CHECKLISTS, LE_MERCHANTS = load_le_databases()
-LE_KW_LOOKUP = {}
-for _row in LE_MERCHANTS:
-    _kw = str(_row.get("keyword","")).lower().strip()
-    if _kw:
-        if _kw not in LE_KW_LOOKUP: LE_KW_LOOKUP[_kw] = []
-        LE_KW_LOOKUP[_kw].append((_row["event_id"], int(_row.get("signal_strength",3))))
-LE_SIG_LOOKUP  = {s["event_id"]: s for s in LE_SIGS}
-LE_CL_LOOKUP   = {c["event_id"]: c for c in LE_CHECKLISTS}
-
-def le_run_detection(df, user_profile=None):
-    from datetime import timedelta
-    analysis_date = df["DATE"].max()
-    window_start  = analysis_date - timedelta(days=60)
-    recent_start  = analysis_date - timedelta(days=30)
-    df_win = df[(df["DATE"]>=window_start)&(df["DATE"]<=analysis_date)].copy()
-    def get_tags(desc):
-        if pd.isna(desc): return []
-        d = str(desc).lower()
-        tags = set()
-        for kw,matches in LE_KW_LOOKUP.items():
-            if kw in d:
-                for eid,strength in matches: tags.add((eid,strength))
-        return list(tags)
-    df_win["_tags"] = df_win["TRANSACTION DETAILS"].apply(get_tags)
-    results = []
-    for sig in LE_SIGS:
-        eid = sig["event_id"]
-        # S1 velocity
-        def esp(pdf):
-            t=0
-            for _,row in pdf.iterrows():
-                for teid,st in row["_tags"]:
-                    if teid==eid: t+=row["WITHDRAWAL AMT"]*(st/5)
-            return t
-        rec = esp(df_win[df_win["DATE"]>=recent_start])
-        pri = esp(df_win[df_win["DATE"]<recent_start])
-        thr = sig["spend_acceleration_threshold"]
-        if pri==0 and rec>0: s1=min(85,50+rec/1000)
-        elif pri==0: s1=0
-        else:
-            acc=rec/(pri+1)
-            if acc>=thr*2: s1=100
-            elif acc>=thr: s1=60+(acc/thr)*20
-            elif acc>=thr*0.5: s1=30+(acc/thr)*30
-            else: s1=min(25,acc*10)
-        s1=round(min(100,max(0,s1)),1)
-        # S2 NLP
-        cutoff = analysis_date - timedelta(days=180)
-        df_scan= df[df["DATE"]>=cutoff]
-        raw_s2=0.0
-        hits=[]
-        for _,row in df_scan.iterrows():
-            desc=str(row.get("TRANSACTION DETAILS","")).lower()
-            days_ago=(analysis_date-row["DATE"]).days
-            rw=max(0.3,1.0-(days_ago/180)*0.7)
-            for kw,matches in LE_KW_LOOKUP.items():
-                if kw in desc:
-                    for teid,strength in matches:
-                        if teid==eid:
-                            raw_s2+=strength*rw*4
-                            hits.append({"keyword":kw,"desc":str(row["TRANSACTION DETAILS"])[:60],"amount":row["WITHDRAWAL AMT"]})
-        s2=round(min(100,(raw_s2/100)*100),1)
-        # S3 profile
-        if user_profile:
-            try: age=int(str(user_profile.get("age_range","25-34")).split("-")[0])+5
-            except: age=30
-            ms=user_profile.get("marital_status","unknown").lower()
-            ch=user_profile.get("children_count",0)
-            ho=user_profile.get("home_owner",False)
-            s3_map={"MARRIAGE":50,"BABY":50,"HOME_PURCHASE":50,"JOB_SWITCH":50,
-                    "CHILD_SCHOOL":50,"RELOCATION":50,"MEDICAL_EVENT":50,"RETIREMENT_PREP":50}
-            if eid=="MARRIAGE":
-                s3_map[eid]=75 if ms in ["single","unmarried"] and 22<=age<=35 else (15 if ms=="married" else 50)
-            elif eid=="BABY": s3_map[eid]=65 if ms=="married" and 25<=age<=38 else 30
-            elif eid=="HOME_PURCHASE": s3_map[eid]=65 if not ho and 28<=age<=45 else 25
-            elif eid=="JOB_SWITCH": s3_map[eid]=60 if 24<=age<=40 else 30
-            elif eid=="CHILD_SCHOOL": s3_map[eid]=65 if ch>0 else 20
-            elif eid=="MEDICAL_EVENT": s3_map[eid]=65 if age>=50 else (55 if age>=40 else 50)
-            elif eid=="RETIREMENT_PREP": s3_map[eid]=70 if age>=45 else (55 if age>=38 else 25)
-            s3=s3_map[eid]
-        else: s3=50
-        # S4 seasonal
-        recent90=df[df["DATE"]>=analysis_date-timedelta(days=90)]
-        active_months=set(recent90["DATE"].dt.month.tolist())
-        seasonal=set(sig["seasonal_months"])
-        overlap=len(active_months&seasonal)
-        cur_bonus=20 if analysis_date.month in seasonal else 0
-        s4=round(min(100,(overlap/max(len(seasonal),1))*80+cur_bonus),1)
-        # Composite
-        composite=round(s1*0.40+s2*0.25+s3*0.25+s4*0.10,1)
-        alert="🔴 HARD" if composite>=82 else ("🟡 SOFT" if composite>=65 else "")
-        results.append({"event_id":eid,"event_name":sig["event_name"],
-                         "emoji":sig["emoji"],"composite":composite,
-                         "s1":s1,"s2":s2,"s3":s3,"s4":s4,
-                         "alert":alert,"hits":hits[:3]})
-    results.sort(key=lambda x:x["composite"],reverse=True)
-    return results
-
 
 def sc_best(amount, category, wallet):
     cat = SC_CMAP.get(category, "Other")
@@ -761,7 +639,7 @@ else:
             st.rerun()
     st.markdown("<hr class='divider'>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📤  UPLOAD", "📊  DASHBOARD", "📈  FORECAST", "🤖  AI ADVISOR", "💳  SMARTCASH", "🎯  LIFEEVENT"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📤  UPLOAD", "📊  DASHBOARD", "📈  FORECAST", "🤖  AI ADVISOR", "💳  SMARTCASH"])
 
     with tab1:
         c1, c2 = st.columns([2, 1])
@@ -1110,71 +988,6 @@ else:
                 top20["BEST_RATE"]     = top20["BEST_RATE"].apply(lambda x: f"{x:.1f}%")
                 st.dataframe(top20, use_container_width=True, hide_index=True)
 
-
-    with tab6:
-        st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 07 — LIFEEVENT RADAR</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">🎯 Life Event Radar</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Detects life events from your spending patterns and generates personalised financial checklists.</div></div>', unsafe_allow_html=True)
-        if st.session_state.get("user_df") is None:
-            st.info("Upload your bank statement in the UPLOAD tab first.")
-        elif not LE_SIGS:
-            st.error("LifeEvent database not loaded — check GitHub for life_event_signatures.json")
-        else:
-            df_le = st.session_state["user_df"]
-            # ── User Profile ────────────────────────────────────────────
-            with st.expander("📋 Your Profile (improves detection accuracy)", expanded=False):
-                st.markdown('<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:12px">Takes 30 seconds — boosts detection accuracy by 40%</div>', unsafe_allow_html=True)
-                pc1,pc2,pc3 = st.columns(3)
-                age_r  = pc1.selectbox("Age Range",["18-24","25-34","35-44","45-54","55+"],index=1,key="le_age")
-                marital= pc2.selectbox("Marital Status",["Single","Married","Divorced"],index=0,key="le_marital")
-                kids   = pc3.number_input("No. of Children",0,10,0,key="le_kids")
-                pc4,pc5,pc6 = st.columns(3)
-                home   = pc4.selectbox("Home Ownership",["Renting","Own Home"],index=0,key="le_home")
-                emp    = pc5.selectbox("Employment",["Salaried","Self-Employed","Business"],index=0,key="le_emp")
-                city   = pc6.selectbox("City Tier",["Tier 1","Tier 2","Tier 3"],index=0,key="le_city")
-                user_profile_le = {"age_range":age_r,"marital_status":marital.lower(),
-                    "children_count":kids,"home_owner":(home=="Own Home"),
-                    "employment_type":emp.lower(),"city_tier":int(city.split()[1])}
-            user_profile_le = {"age_range":st.session_state.get("le_age","25-34"),
-                "marital_status":st.session_state.get("le_marital","single").lower(),
-                "children_count":st.session_state.get("le_kids",0),
-                "home_owner":(st.session_state.get("le_home","Renting")=="Own Home"),
-                "employment_type":st.session_state.get("le_emp","salaried").lower(),
-                "city_tier":1}
-            # ── Run Detection ────────────────────────────────────────────
-            if st.button("🎯 Scan for Life Events", key="le_scan"):
-                with st.spinner("Scanning your spending patterns for life event signals..."):
-                    st.session_state["le_results"] = le_run_detection(df_le, user_profile_le)
-            if st.session_state.get("le_results"):
-                le_res = st.session_state["le_results"]
-                alerts = [r for r in le_res if r["composite"]>=65]
-                if not alerts:
-                    st.markdown('<div style="margin:24px 40px;padding:24px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;text-align:center;color:rgba(255,255,255,0.4)">✅ No significant life events detected in your spending — all patterns look routine.</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div style="margin:16px 40px 8px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">{len(alerts)} LIFE EVENT(S) DETECTED</div>', unsafe_allow_html=True)
-                    for ev in alerts:
-                        cl = LE_CL_LOOKUP.get(ev["event_id"],{})
-                        alert_col = "#ff3c64" if ev["alert"]=="🔴 HARD" else "#f5a000"
-                        st.markdown(f'<div style="margin:0 40px 16px;padding:20px 24px;background:rgba(255,255,255,0.03);border:1px solid {alert_col}40;border-radius:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-size:20px;font-weight:800">{ev["emoji"]} {ev["event_name"]}</div><div style="font-family:DM Mono,monospace;font-size:12px;color:{alert_col};background:{alert_col}20;padding:4px 10px;border-radius:6px">{ev["alert"]} · {ev["composite"]:.0f}/100</div></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px"><div style="text-align:center;padding:8px;background:rgba(255,255,255,0.04);border-radius:8px"><div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace">VELOCITY</div><div style="font-weight:700;color:#00f5a0">{ev["s1"]:.0f}</div></div><div style="text-align:center;padding:8px;background:rgba(255,255,255,0.04);border-radius:8px"><div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace">NLP</div><div style="font-weight:700;color:#00d4ff">{ev["s2"]:.0f}</div></div><div style="text-align:center;padding:8px;background:rgba(255,255,255,0.04);border-radius:8px"><div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace">PROFILE</div><div style="font-weight:700;color:#a78bfa">{ev["s3"]:.0f}</div></div><div style="text-align:center;padding:8px;background:rgba(255,255,255,0.04);border-radius:8px"><div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace">SEASONAL</div><div style="font-weight:700;color:#f59e0b">{ev["s4"]:.0f}</div></div></div>', unsafe_allow_html=True)
-                        if ev["hits"]:
-                            st.markdown(f'<div style="margin:0 40px 4px;padding:0 24px;font-size:12px;color:rgba(255,255,255,0.5)">Top signals: {", ".join([h["keyword"] for h in ev["hits"]])}</div>', unsafe_allow_html=True)
-                        if cl:
-                            with st.expander(f"📋 Financial Checklist — {ev['event_name']}"):
-                                st.markdown(f'**Corpus needed:** {cl.get("corpus_estimate","—")}')
-                                st.markdown(f'**Timeline:** {cl.get("timeline_months","?")} months')
-                                p1 = [x for x in cl.get("checklist_items",[]) if x["priority"]==1]
-                                p2 = [x for x in cl.get("checklist_items",[]) if x["priority"]==2]
-                                if p1:
-                                    st.markdown("**🔴 Do immediately:**")
-                                    for item in p1: st.checkbox(f'[{item["category"]}] {item["action"]}', key=f'le_{ev["event_id"]}_{item["priority"]}_{item["action"][:20]}')
-                                if p2:
-                                    st.markdown("**🟡 Do within 3 months:**")
-                                    for item in p2: st.checkbox(f'[{item["category"]}] {item["action"]}', key=f'le2_{ev["event_id"]}_{item["action"][:20]}')
-                                if cl.get("insurance_gaps"):
-                                    st.markdown("**🛡️ Insurance gaps to fill:**")
-                                    for gap in cl["insurance_gaps"]: st.markdown(f"- {gap}")
-                # ── Full scores table ────────────────────────────────────────
-                with st.expander("🔍 Full Detection Scores (all 8 events)"):
-                    score_df = pd.DataFrame([{"Event":r["emoji"]+" "+r["event_name"],"Score":r["composite"],"Velocity":r["s1"],"NLP":r["s2"],"Profile":r["s3"],"Seasonal":r["s4"],"Alert":r["alert"] or "—"} for r in le_res])
-                    st.dataframe(score_df, use_container_width=True, hide_index=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + TREND FORECAST + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
