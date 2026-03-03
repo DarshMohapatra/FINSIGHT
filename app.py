@@ -671,7 +671,39 @@ def mu_compute_roundups(df, threshold=10):
     monthly["DATE"] = monthly["DATE"].dt.to_timestamp()
     return df_w, monthly
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📤  UPLOAD", "📊  DASHBOARD", "📈  FORECAST", "🤖  AI ADVISOR", "💳  SMARTCASH", "💰  INVEST"])
+
+# ── MicroRoundUp globals ──────────────────────────────────────
+import urllib.request as _muu, json as _muj
+
+@st.cache_data(ttl=86400)
+def load_mu_databases():
+    _b = "https://raw.githubusercontent.com/DarshMohapatra/FINSIGHT/main/"
+    def _gj(f):
+        try:
+            with _muu.urlopen(_b+f, timeout=10) as resp: return _muj.load(resp)
+        except Exception as e: st.warning(f"MU DB load failed: {e}"); return {}
+    instr  = _gj("indian_instruments.json")
+    xirr   = _gj("xirr_simulation.json")
+    mc     = _gj("monte_carlo_projections.json")
+    return instr, xirr, mc
+
+MU_INSTR_RAW, MU_XIRR, MU_MC = load_mu_databases()
+MU_INSTRUMENTS = MU_INSTR_RAW.get("instruments", []) if isinstance(MU_INSTR_RAW, dict) else []
+MU_DISCLAIMER  = MU_INSTR_RAW.get("sebi_disclaimer", "") if isinstance(MU_INSTR_RAW, dict) else ""
+MU_LAST_UPDATED= MU_INSTR_RAW.get("last_updated", "") if isinstance(MU_INSTR_RAW, dict) else ""
+
+def mu_compute_roundups(df, threshold=10):
+    df_w = df[df["WITHDRAWAL AMT"]>0].copy()
+    remainder = df_w["WITHDRAWAL AMT"] % threshold
+    df_w["ROUNDUP"] = threshold - remainder
+    df_w.loc[remainder==0, "ROUNDUP"] = threshold
+    monthly = (df_w.groupby(df_w["DATE"].dt.to_period("M"))
+               .agg(roundup_total=("ROUNDUP","sum"),txn_count=("ROUNDUP","count"))
+               .reset_index())
+    monthly["DATE"] = monthly["DATE"].dt.to_timestamp()
+    return df_w, monthly
+
+    tab1, tab2, tab3, tab4, tab5, tab7, tab6 = st.tabs(["📤  UPLOAD", "📊  DASHBOARD", "📈  FORECAST", "🤖  AI ADVISOR", "💳  SMARTCASH", "💰  INVEST"])
 
     with tab1:
         c1, c2 = st.columns([2, 1])
@@ -1023,6 +1055,90 @@ def mu_compute_roundups(df, threshold=10):
 
 
     with tab6:
+        st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 17 — MICROROUNDUP</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💰 MicroRoundUp India</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Round up every transaction to the nearest ₹10/₹50/₹100. Invest the spare change into Nifty ETF, Gold, or ELSS. Watch it compound.</div></div>', unsafe_allow_html=True)
+        if st.session_state.get("user_df") is None:
+            st.info("Upload your bank statement in the UPLOAD tab first.")
+        else:
+            df_mu = st.session_state["user_df"]
+            mc1, mc2, mc3 = st.columns([1,1,1])
+            threshold = mc1.radio("Round-up threshold", [10, 50, 100],
+                format_func=lambda x: f"₹{x} per transaction",
+                horizontal=False, key="mu_threshold")
+            df_rw, monthly_ru = mu_compute_roundups(df_mu, threshold)
+            total_corpus  = float(df_rw["ROUNDUP"].sum())
+            monthly_avg   = total_corpus / max(len(monthly_ru), 1)
+            total_txns    = len(df_rw)
+            mc2.metric("Total Round-Up Corpus", f"₹{total_corpus:,.0f}")
+            mc2.metric("Monthly Average", f"₹{monthly_avg:,.0f}")
+            mc3.metric("Transactions Rounded", f"{total_txns:,}")
+            mc3.metric("Avg per Transaction", f"₹{total_corpus/max(total_txns,1):.1f}")
+            st.markdown('<div style="margin:24px 40px 8px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">MONTHLY ROUND-UP CORPUS</div>', unsafe_allow_html=True)
+            import plotly.graph_objects as go
+            fig_bar = go.Figure()
+            fig_bar.add_trace(go.Bar(
+                x=monthly_ru["DATE"].astype(str),
+                y=monthly_ru["roundup_total"],
+                marker_color="#00f5a0", opacity=0.85,
+                hovertemplate="<b>%{x}</b><br>₹%{y:,.0f}<extra></extra>"
+            ))
+            fig_bar.update_layout(
+                paper_bgcolor="#080d1a", plot_bgcolor="#0d1420",
+                margin=dict(l=40,r=40,t=20,b=40), height=280,
+                xaxis=dict(showgrid=False, color="#555"),
+                yaxis=dict(gridcolor="#1a2035", color="#555",
+                           tickprefix="₹", tickformat=",.0f"),
+                showlegend=False
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+            st.markdown('<div style="margin:8px 40px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">HISTORICAL XIRR SIMULATION (₹10 THRESHOLD)</div>', unsafe_allow_html=True)
+            if MU_XIRR:
+                xirr_cols = st.columns(len(MU_XIRR))
+                INST_META = {"NIFTYBEES":("Nifty 50 ETF","#00f5a0"),"JUNIORBEES":("Nifty Next 50","#00d4ff"),"GOLDBEES":("Gold ETF","#f59e0b")}
+                for col_ui, (inst_id, xdata) in zip(xirr_cols, MU_XIRR.items()):
+                        name, color = INST_META.get(inst_id, (inst_id,"#fff"))
+                        invested = xdata.get("total_invested",0)
+                        current  = xdata.get("current_value",0)
+                        xirr_v   = xdata.get("xirr_pct","—")
+                        gain     = xdata.get("absolute_gain",0)
+                        vs_fd    = xdata.get("vs_fd_delta",0)
+                        col_ui.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid {color}30;border-radius:12px;margin-bottom:8px"><div style="font-size:11px;color:{color};font-family:DM Mono,monospace;margin-bottom:6px">{name}</div><div style="font-size:22px;font-weight:800;color:{color}">{xirr_v}%</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px">XIRR</div><div style="margin-top:12px;font-size:12px;color:rgba(255,255,255,0.6)">Invested: ₹{invested:,.0f}</div><div style="font-size:12px;color:rgba(255,255,255,0.6)">Value: ₹{current:,.0f}</div><div style="font-size:12px;color:{"#00f5a0" if gain>0 else "#ff3c64"}">Gain: ₹{gain:+,.0f}</div><div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px">vs FD: ₹{vs_fd:+,.0f}</div></div>', unsafe_allow_html=True)
+            st.markdown('<div style="margin:8px 40px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">MONTE CARLO PROJECTION — 1000 SIMULATIONS</div>', unsafe_allow_html=True)
+            thr_key = str(threshold)
+            if MU_MC and thr_key in MU_MC:
+                mc_data = MU_MC[thr_key]
+                years_list = [5, 10, 15, 20]
+                p25  = [mc_data["projections"][str(y)]["p25"]  for y in years_list]
+                p50  = [mc_data["projections"][str(y)]["p50"]  for y in years_list]
+                p75  = [mc_data["projections"][str(y)]["p75"]  for y in years_list]
+                inv  = [mc_data["projections"][str(y)]["simple_invested"] for y in years_list]
+                fig_mc = go.Figure()
+                fig_mc.add_trace(go.Scatter(x=years_list+years_list[::-1],y=p75+p25[::-1],fill="toself",fillcolor="rgba(0,245,160,0.08)",line=dict(color="rgba(0,0,0,0)"),name="25th–75th pct",hoverinfo="skip"))
+                fig_mc.add_trace(go.Scatter(x=years_list,y=p50,mode="lines+markers+text",line=dict(color="#00f5a0",width=3),marker=dict(size=8),text=[f'₹{v/100000:.0f}L' if v<10000000 else f'₹{v/10000000:.1f}Cr' for v in p50],textposition="top center",textfont=dict(color="#00f5a0",size=10),name="Median"))
+                fig_mc.add_trace(go.Scatter(x=years_list,y=p75,mode="lines",line=dict(color="#00d4ff",width=1.5,dash="dash"),name="Optimistic (75th)"))
+                fig_mc.add_trace(go.Scatter(x=years_list,y=p25,mode="lines",line=dict(color="#f59e0b",width=1.5,dash="dash"),name="Conservative (25th)"))
+                fig_mc.add_trace(go.Scatter(x=years_list,y=inv,mode="lines",line=dict(color="rgba(255,255,255,0.3)",width=1.5,dash="dot"),name="Amount Invested"))
+                fig_mc.update_layout(paper_bgcolor="#080d1a",plot_bgcolor="#0d1420",margin=dict(l=40,r=40,t=30,b=40),height=380,xaxis=dict(tickvals=years_list,ticktext=[f"{y}yr" for y in years_list],showgrid=False,color="#555"),yaxis=dict(gridcolor="#1a2035",color="#555",tickformat=",.0f",tickprefix="₹"),legend=dict(bgcolor="rgba(0,0,0,0)",font=dict(color="#aaa",size=10)),)
+                st.plotly_chart(fig_mc, use_container_width=True)
+            st.markdown('<div style="margin:8px 40px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">AVAILABLE INSTRUMENTS</div>', unsafe_allow_html=True)
+            if MU_INSTRUMENTS:
+                for i in range(0, len(MU_INSTRUMENTS), 3):
+                        row_insts = MU_INSTRUMENTS[i:i+3]
+                        icols = st.columns(len(row_insts))
+                        for ic, inst in zip(icols, row_insts):
+                            r = inst.get("returns", {})
+                            r1 = f'{r.get("1Y","—")}%' if r.get("1Y") else "—"
+                            r3 = f'{r.get("3Y","—")}%' if r.get("3Y") else "—"
+                            r5 = f'{r.get("5Y","—")}%' if r.get("5Y") else "—"
+                            tax_badge = '<span style="background:#00f5a020;color:#00f5a0;font-size:9px;padding:2px 6px;border-radius:4px;margin-left:6px">80C</span>' if inst.get("tax_benefit") else ""
+                            links = inst.get("platform_links", {})
+                            link_html = " · ".join([f'<a href="{v}" target="_blank" style="color:#00d4ff;font-size:10px">{k.title()}</a>' for k,v in links.items()])
+                            risk_color = inst.get("risk_color","#888")
+                            ic.markdown(f'<div style="padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="display:flex;align-items:center;margin-bottom:6px"><span style="font-weight:700;font-size:13px">{inst["name"]}</span>{tax_badge}</div><div style="font-size:10px;color:{risk_color};font-family:DM Mono,monospace;margin-bottom:8px">{inst["risk"]} RISK · {inst["type"]}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px"><div style="text-align:center;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px"><div style="font-size:9px;color:rgba(255,255,255,0.4)">1Y</div><div style="font-size:12px;font-weight:600">{r1}</div></div><div style="text-align:center;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px"><div style="font-size:9px;color:rgba(255,255,255,0.4)">3Y</div><div style="font-size:12px;font-weight:600">{r3}</div></div><div style="text-align:center;padding:4px;background:rgba(255,255,255,0.03);border-radius:6px"><div style="font-size:9px;color:rgba(255,255,255,0.4)">5Y</div><div style="font-size:12px;font-weight:600">{r5}</div></div></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:6px">{inst.get("description","")[:80]}</div><div>{link_html}</div></div>', unsafe_allow_html=True)
+            if MU_DISCLAIMER:
+                st.markdown(f'<div style="margin:16px 40px;padding:12px 16px;background:rgba(255,255,255,0.02);border-left:3px solid rgba(255,255,255,0.15);border-radius:4px"><span style="font-size:10px;color:rgba(255,255,255,0.3);font-family:DM Mono,monospace">⚖️ SEBI DISCLAIMER · {MU_DISCLAIMER}</span></div>', unsafe_allow_html=True)
+
+
+    with tab7:
         st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 17 — MICROROUNDUP</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💰 MicroRoundUp India</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Round up every transaction to the nearest ₹10/₹50/₹100. Invest the spare change into Nifty ETF, Gold, or ELSS. Watch it compound.</div></div>', unsafe_allow_html=True)
         if st.session_state.get("user_df") is None:
             st.info("Upload your bank statement in the UPLOAD tab first.")
