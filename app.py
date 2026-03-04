@@ -799,42 +799,6 @@ else:
                     st.plotly_chart(_yir_fig, use_container_width=True)
         st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin:8px 0 24px"></div>', unsafe_allow_html=True)
 
-        # ── Year-in-Review ─────────────────────────────────────────
-        _yir_years = sorted([int(k) for k in YIR_DATA.keys()], reverse=True) if YIR_DATA else []
-        if _yir_years:
-            _yir_c1, _yir_c2 = st.columns([3,1])
-            _yir_c1.markdown('<div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:4px">✨ YEAR IN REVIEW</div>', unsafe_allow_html=True)
-            _yir_sel = _yir_c2.selectbox("", _yir_years, index=0, key="yir_year", label_visibility="collapsed")
-            _yd = YIR_DATA.get(str(_yir_sel), {})
-            if _yd:
-                st.markdown(f'<div style="margin:0 0 20px;padding:24px 32px;background:linear-gradient(135deg,rgba(0,245,160,0.08),rgba(0,212,255,0.04));border:1px solid rgba(0,245,160,0.2);border-radius:16px;text-align:center"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">{_yir_sel} · YEAR IN REVIEW</div><div style="font-size:42px;font-weight:900;margin-bottom:4px">{format_inr(_yd.get("total_spent",0))}</div><div style="color:rgba(255,255,255,0.4);font-size:13px">total spent across {_yd.get("total_txns",0):,} transactions</div><div style="margin-top:12px;font-size:16px;color:{"#00f5a0" if _yd.get("net_saved",0)>=0 else "#ff3c64"};font-weight:700">{"💰 Saved " if _yd.get("net_saved",0)>=0 else "📉 Deficit "}{format_inr(abs(_yd.get("net_saved",0)))} · {_yd.get("savings_rate",0)}% savings rate</div></div>', unsafe_allow_html=True)
-                _yr1, _yr2, _yr3, _yr4 = st.columns(4)
-                _yr1.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="font-size:9px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:2px;margin-bottom:6px">🏆 TOP MERCHANT</div><div style="font-size:15px;font-weight:700;margin-bottom:2px">{_yd.get("top_merchant_by_amount",{}).get("name","—")[:22]}</div><div style="font-size:11px;color:#00f5a0">{format_inr(_yd.get("top_merchant_by_amount",{}).get("amount",0))}</div></div>', unsafe_allow_html=True)
-                _yr2.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="font-size:9px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:2px;margin-bottom:6px">📅 BIGGEST DAY</div><div style="font-size:15px;font-weight:700;margin-bottom:2px">{_yd.get("most_expensive_day",{}).get("date","—")}</div><div style="font-size:11px;color:#00f5a0">{format_inr(_yd.get("most_expensive_day",{}).get("amount",0))}</div></div>', unsafe_allow_html=True)
-                _yr3.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="font-size:9px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:2px;margin-bottom:6px">🔥 BIGGEST MONTH</div><div style="font-size:15px;font-weight:700;margin-bottom:2px">{_yd.get("biggest_month",{}).get("name","—")}</div><div style="font-size:11px;color:#00f5a0">{format_inr(_yd.get("biggest_month",{}).get("amount",0))}</div></div>', unsafe_allow_html=True)
-                _yr4.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="font-size:9px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:2px;margin-bottom:6px">😴 QUIETEST MONTH</div><div style="font-size:15px;font-weight:700;margin-bottom:2px">{_yd.get("quietest_month",{}).get("name","—")}</div><div style="font-size:11px;color:#a78bfa">{format_inr(_yd.get("quietest_month",{}).get("amount",0))}</div></div>', unsafe_allow_html=True)
-                _yr5, _yr6, _yr7, _yr8 = st.columns(4)
-                _yr5.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="font-size:9px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:2px;margin-bottom:6px">🍕 TOP CATEGORY</div><div style="font-size:15px;font-weight:700;margin-bottom:2px">{_yd.get("top_category",{}).get("name","—")[:18]}</div><div style="font-size:11px;color:#f59e0b">{_yd.get("top_category",{}).get("pct",0)}% of spend</div></div>', unsafe_allow_html=True)
-                _yr6.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="font-size:9px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:2px;margin-bottom:6px">⚡ LARGEST TXN</div><div style="font-size:15px;font-weight:700;margin-bottom:2px">{format_inr(_yd.get("largest_txn",{}).get("amount",0))}</div><div style="font-size:11px;color:rgba(255,255,255,0.4)">{_yd.get("largest_txn",{}).get("desc","—")[:20]}</div></div>', unsafe_allow_html=True)
-                _yr7.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="font-size:9px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:2px;margin-bottom:6px">🔄 MOST FREQUENT</div><div style="font-size:15px;font-weight:700;margin-bottom:2px">{_yd.get("top_merchant_by_frequency",{}).get("name","—")[:22]}</div><div style="font-size:11px;color:#00d4ff">{_yd.get("top_merchant_by_frequency",{}).get("count",0)} times</div></div>', unsafe_allow_html=True)
-                _yr8.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px"><div style="font-size:9px;color:rgba(255,255,255,0.35);font-family:DM Mono,monospace;letter-spacing:2px;margin-bottom:6px">🚨 ANOMALIES</div><div style="font-size:15px;font-weight:700;margin-bottom:2px">{_yd.get("anomaly_count",0):,}</div><div style="font-size:11px;color:#ff3c64">suspicious txns</div></div>', unsafe_allow_html=True)
-                _yir_monthly = _yd.get("monthly_spend", {})
-                if _yir_monthly:
-                    import plotly.graph_objects as _yirgo
-                    _yir_months = list(_yir_monthly.keys())
-                    _yir_vals   = list(_yir_monthly.values())
-                    _yir_fig = _yirgo.Figure()
-                    _yir_fig.add_trace(_yirgo.Bar(x=_yir_months,y=_yir_vals,
-                        marker_color=["#00f5a0" if v==max(_yir_vals) else "#1a3a2a" for v in _yir_vals],
-                        hovertemplate="<b>%{x}</b><br>₹%{y:,.0f}<extra></extra>"))
-                    _yir_fig.update_layout(paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
-                        margin=dict(l=0,r=0,t=0,b=0),height=140,
-                        xaxis=dict(showgrid=False,color="#444",tickfont=dict(size=9)),
-                        yaxis=dict(showgrid=False,visible=False),showlegend=False)
-                    st.markdown('<div style="font-size:9px;color:rgba(255,255,255,0.3);font-family:DM Mono,monospace;letter-spacing:2px;margin-bottom:4px">MONTHLY SPEND PATTERN</div>', unsafe_allow_html=True)
-                    st.plotly_chart(_yir_fig, use_container_width=True)
-        st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin:8px 0 24px"></div>', unsafe_allow_html=True)
-
         if st.session_state.user_df is None:
             st.markdown('<div style="text-align:center;padding:100px 0;"><div style="font-size:56px;margin-bottom:16px;">📤</div><div style="font-family:DM Mono,monospace;font-size:12px;color:rgba(255,255,255,0.2);letter-spacing:2px;">UPLOAD A FILE FIRST</div></div>', unsafe_allow_html=True)
         else:
