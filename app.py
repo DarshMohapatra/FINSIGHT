@@ -36,12 +36,10 @@ try:
     def _save_month(uid,month,df_m):
         import json as _j
         try:
-            _cols_to_save = [c for c in df_m.columns if c != "DATE"] + ["DATE"]
-            _sb.table("user_statements").upsert({"user_id":uid,"month_period":month,"row_count":len(df_m),"data_json":_j.loads(df_m[_cols_to_save].to_json(orient="records",date_format="iso"))},on_conflict="user_id,month_period").execute()
-            return True
+            _sb.table("user_statements").upsert({"user_id":uid,"month_period":month,"row_count":len(df_m),"data_json":_j.loads(df_m.to_json(orient="records",date_format="iso"))},on_conflict="user_id,month_period").execute()
+            return {"ok":True}
         except Exception as _e:
-            import traceback; traceback.print_exc()
-            return False
+            return {"ok":False,"error":str(_e)}
     def _load_statements(uid):
         r=_sb.table("user_statements").select("data_json,month_period").eq("user_id",uid).order("month_period").execute()
         if not r.data: return pd.DataFrame()
@@ -61,7 +59,7 @@ except Exception as _sbe:
     SUPABASE_OK = False
     def _signup(*a,**k): return {"success":False,"error":"Auth unavailable"}
     def _login(*a,**k): return {"success":False,"error":"Auth unavailable"}
-    def _save_month(*a,**k): return False
+    def _save_month(*a,**k): return {"ok":False,"error":"Auth unavailable"}
     def _load_statements(*a,**k): return pd.DataFrame()
     def _delete_user(*a,**k): return False
     def _reset_password(*a,**k): return {"success":False,"error":"Auth unavailable"}
@@ -1080,14 +1078,15 @@ else:
                             st.success("✅ Analysis complete! Found " + str(len(df)) + " transactions.")
                             if st.session_state.get("auth_user"):
                                 _uid=st.session_state.auth_user["user_id"]
-                                _save_ok = True
+                                _save_err = None
                                 for _mp,_mdf in df.groupby(df["DATE"].dt.to_period("M")):
-                                    if not _save_month(_uid,str(_mp),_mdf):
-                                        _save_ok = False
-                                if _save_ok:
+                                    _sr = _save_month(_uid,str(_mp),_mdf)
+                                    if not _sr["ok"]:
+                                        _save_err = _sr.get("error","Unknown error")
+                                if _save_err is None:
                                     st.success("☁️ Data saved to cloud — it will persist across sessions.")
                                 else:
-                                    st.warning("⚠️ Cloud save failed. Data available this session only.")
+                                    st.warning("⚠️ Cloud save failed: " + _save_err)
                         except Exception as e:
                             st.error("❌ " + str(e))
         with c2:
