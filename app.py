@@ -1087,7 +1087,7 @@ else:
                             if st.session_state.get("auth_user"):
                                 _uid=st.session_state.auth_user["user_id"]
                                 _save_err = None
-                                for _mp,_mdf in df.groupby(df["DATE"].dt.to_period("M")):
+                                for _mp,_mdf in df.groupby(df["DATE"].dt.to_period("M").astype(str)):
                                     _sr = _save_month(_uid,str(_mp),_mdf)
                                     if not _sr["ok"]:
                                         _save_err = _sr.get("error","Unknown error")
