@@ -189,6 +189,33 @@ def categorize(desc):
     # Bank charges
     elif any(k in d for k in ["SERVICE CHARGE", "BANK CHARGE", "ANNUAL FEE", "LATE FEE",
         "PENALTY", "INTEREST CHARGED", "DEBIT INTEREST", "MIN BAL"]): return "Bank Charges"
+    # POS / Card swipes
+    elif any(k in d for k in ["POS ", "POS/", "POINT OF SALE", "CARD SWIPE", "ECOM",
+        "MERCHANT", "CONTACTLESS"]): return "Card Payment"
+    # Credit card bill payments
+    elif any(k in d for k in ["CREDIT CARD", "CC BILL", "CC PAYMENT", "CARD BILL",
+        "CRED ", "CRED/", "CARDPAY"]): return "Credit Card Bill"
+    # Digital wallets & payment apps (non-UPI)
+    elif any(k in d for k in ["PHONEPE", "PAYTM", "GPAY", "GOOGLE PAY", "MOBIKWIK",
+        "FREECHARGE", "WALLET", "LAZYPAY", "SIMPL", "SLICE"]): return "Digital Wallet"
+    # Payment gateways
+    elif any(k in d for k in ["BILLDESK", "RAZORPAY", "PAYU", "CASHFREE", "CCAVENUE",
+        "PAYGATE", "PAYMENT GATEWAY", "INSTAMOJO"]): return "Bill Payment"
+    # Auto-debit / Standing instructions
+    elif any(k in d for k in ["SI/", "ECS/", "ECS ", "NACH/", "NACH ", "AUTO DEBIT",
+        "STANDING INSTRUCTION", "MANDATE", "E-MANDATE", "AUTOPAY"]): return "Auto-Debit"
+    # Refunds & reversals
+    elif any(k in d for k in ["REFUND", "REVERSAL", "CASHBACK", "REVERSL", "REV/",
+        "FAILED TXN", "RETURN"]): return "Refund"
+    # Dividend & interest income
+    elif any(k in d for k in ["DIVIDEND", "DIV/", "INT ON", "INTEREST CREDIT",
+        "INT.CREDIT", "BONUS"]): return "Dividend/Interest"
+    # International / forex
+    elif any(k in d for k in ["SWIFT", "FOREX", "WIRE TRANSFER", "FOREIGN",
+        "INTERNATIONAL", "CROSS BORDER", "FCY"]): return "International"
+    # Miscellaneous bank operations
+    elif any(k in d for k in ["DEBIT MEMO", "ADJUSTMENT", "CLEARING", "SETTLEMENT",
+        "SUSPENSE", "CONSOLIDATED", "MISC"]): return "Bank Misc"
     else: return "Other"
 
 
