@@ -36,9 +36,12 @@ try:
     def _save_month(uid,month,df_m):
         import json as _j
         try:
-            _sb.table("user_statements").upsert({"user_id":uid,"month_period":month,"row_count":len(df_m),"data_json":_j.loads(df_m.to_json(orient="records",date_format="iso"))},on_conflict="user_id,month_period").execute()
+            _cols_to_save = [c for c in df_m.columns if c != "DATE"] + ["DATE"]
+            _sb.table("user_statements").upsert({"user_id":uid,"month_period":month,"row_count":len(df_m),"data_json":_j.loads(df_m[_cols_to_save].to_json(orient="records",date_format="iso"))},on_conflict="user_id,month_period").execute()
             return True
-        except: return False
+        except Exception as _e:
+            import traceback; traceback.print_exc()
+            return False
     def _load_statements(uid):
         r=_sb.table("user_statements").select("data_json,month_period").eq("user_id",uid).order("month_period").execute()
         if not r.data: return pd.DataFrame()
@@ -1077,14 +1080,22 @@ else:
                             st.success("✅ Analysis complete! Found " + str(len(df)) + " transactions.")
                             if st.session_state.get("auth_user"):
                                 _uid=st.session_state.auth_user["user_id"]
+                                _save_ok = True
                                 for _mp,_mdf in df.groupby(df["DATE"].dt.to_period("M")):
-                                    _save_month(_uid,str(_mp),_mdf)
+                                    if not _save_month(_uid,str(_mp),_mdf):
+                                        _save_ok = False
+                                if _save_ok:
+                                    st.success("☁️ Data saved to cloud — it will persist across sessions.")
+                                else:
+                                    st.warning("⚠️ Cloud save failed. Data available this session only.")
                         except Exception as e:
                             st.error("❌ " + str(e))
         with c2:
             st.markdown('<div class="glass" style="margin-top:72px;"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px;margin-bottom:16px;">AUTO-DETECTED COLUMNS</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><tr style="color:rgba(255,255,255,0.3);"><td style="padding:6px 0;font-family:DM Mono,monospace;">Required As</td><td style="padding:6px 0;font-family:DM Mono,monospace;">Also Accepted</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:#00f5a0;font-family:DM Mono,monospace;font-size:11px;">DATE</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Transaction Date, Timestamp</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:#00f5a0;font-family:DM Mono,monospace;font-size:11px;">TRANSACTION DETAILS</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Narration, Type, Category</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:#00f5a0;font-family:DM Mono,monospace;font-size:11px;">WITHDRAWAL AMT</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Debit, Debit Amt, DR</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:rgba(255,255,255,0.5);font-family:DM Mono,monospace;font-size:11px;">DEPOSIT AMT</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Credit, Credit Amt, CR</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:rgba(255,255,255,0.5);font-family:DM Mono,monospace;font-size:11px;">BALANCE AMT</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Balance, Closing Balance</td></tr></table></div>', unsafe_allow_html=True)
 
-        if st.session_state.analysis_done and st.session_state.user_df is not None:
+        if st.session_state.get("analysis_done") and st.session_state.get("user_df") is not None:
+            if not uploaded:
+                st.info("☁️ Your previously uploaded statement was loaded from the cloud.")
             df = st.session_state.user_df
             st.markdown("<hr class='divider'>", unsafe_allow_html=True)
             # ── Guardrails FIRST (so anomaly count is correct) ──
