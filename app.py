@@ -33,30 +33,24 @@ try:
         if not _verify_pw(password,u["password_hash"]): return {"success":False,"error":"Incorrect password."}
         prefs=_sb.table("user_preferences").select("*").eq("user_id",u["id"]).execute()
         return {"success":True,"user_id":u["id"],"display_name":u["display_name"],"age":u["age"],"prefs":prefs.data[0] if prefs.data else {}}
-    def _jsonable(v):
-        if v is None or (isinstance(v,float) and np.isnan(v)): return None
-        if isinstance(v,(np.integer,)): return int(v)
-        if isinstance(v,(np.floating,)): return float(v)
-        if isinstance(v,(np.bool_,)): return bool(v)
-        if isinstance(v,(pd.Timestamp,)): return v.isoformat()
-        if isinstance(v,(pd.Period,)): return str(v)
-        if hasattr(v,"isoformat"): return v.isoformat()
-        if isinstance(v,(np.ndarray,)): return v.tolist()
-        if isinstance(v,(bytes,)): return v.decode()
-        return v
-    def _save_month(uid,month,df_m):
-        import json as _j
+    try: _sb.storage.create_bucket("statements",{"public":False})
+    except: pass
+    def _save_file(uid,name,data):
         try:
-            _rows = [{k:_jsonable(v) for k,v in row.items()} for row in df_m.to_dict(orient="records")]
-            _sb.table("user_statements").upsert({"user_id":uid,"month_period":str(month),"row_count":len(df_m),"data_json":_rows},on_conflict="user_id,month_period").execute()
+            path=f"{uid}/{name}"
+            try: _sb.storage.from_("statements").remove([path])
+            except: pass
+            _sb.storage.from_("statements").upload(path,data)
             return {"ok":True}
-        except Exception as _e:
-            return {"ok":False,"error":str(_e)}
-    def _load_statements(uid):
-        r=_sb.table("user_statements").select("data_json,month_period").eq("user_id",uid).order("month_period").execute()
-        if not r.data: return pd.DataFrame()
-        df=pd.concat([pd.DataFrame(row["data_json"]) for row in r.data],ignore_index=True)
-        df["DATE"]=pd.to_datetime(df["DATE"]); return df
+        except Exception as _e: return {"ok":False,"error":str(_e)}
+    def _list_files(uid):
+        try:
+            fs=_sb.storage.from_("statements").list(str(uid))
+            return [f["name"] for f in fs if f.get("name")] if fs else []
+        except: return []
+    def _download_file(uid,name):
+        try: return _sb.storage.from_("statements").download(f"{uid}/{name}")
+        except: return None
     def _delete_user(uid):
         try: _sb.table("users").delete().eq("id",uid).execute(); return True
         except: return False
@@ -71,8 +65,9 @@ except Exception as _sbe:
     SUPABASE_OK = False
     def _signup(*a,**k): return {"success":False,"error":"Auth unavailable"}
     def _login(*a,**k): return {"success":False,"error":"Auth unavailable"}
-    def _save_month(*a,**k): return {"ok":False,"error":"Auth unavailable"}
-    def _load_statements(*a,**k): return pd.DataFrame()
+    def _save_file(*a,**k): return {"ok":False,"error":"Auth unavailable"}
+    def _list_files(*a,**k): return []
+    def _download_file(*a,**k): return None
     def _delete_user(*a,**k): return False
     def _reset_password(*a,**k): return {"success":False,"error":"Auth unavailable"}
 
@@ -981,13 +976,6 @@ elif st.session_state.page == "auth":
                         _res = _login(_le, _lp)
                     if _res["success"]:
                         st.session_state.auth_user = _res
-                        with st.spinner("Loading your data..."):
-                            _stored = _load_statements(_res["user_id"])
-                        if not _stored.empty:
-                            st.session_state.user_df = _stored
-                            st.session_state.analysis_done = True
-                            st.session_state.forecast_cache = None
-                            st.session_state.forecast_df_id = None
                         st.session_state.page = "app"
                         st.rerun()
                     else:
@@ -1060,6 +1048,28 @@ else:
             st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin:28px 0 8px;">UPLOAD YOUR FILE</div>', unsafe_allow_html=True)
             st.markdown('<h3 style="font-size:24px;font-weight:700;margin-bottom:8px;">Bank Statement Analyzer</h3>', unsafe_allow_html=True)
             st.markdown('<p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px;">Upload any CSV or Excel bank statement. We auto-detect columns and run the full ML pipeline.</p>', unsafe_allow_html=True)
+            if st.session_state.get("auth_user") and not st.session_state.get("analysis_done"):
+                _uid_chk = st.session_state.auth_user["user_id"]
+                _saved = _list_files(_uid_chk)
+                if _saved:
+                    st.markdown(f'<div style="background:rgba(0,245,160,0.06);border:1px solid rgba(0,245,160,0.15);border-radius:12px;padding:16px 20px;margin-bottom:20px"><span style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:1px">☁️ PREVIOUSLY UPLOADED</span><br><span style="color:rgba(255,255,255,0.5);font-size:13px;margin-top:4px;display:inline-block">{_saved[0]}</span></div>', unsafe_allow_html=True)
+                    if st.button("📄 Load Previously Uploaded Statement", use_container_width=True, key="btn_load_prev"):
+                        with st.spinner("Downloading & analyzing..."):
+                            _fdata = _download_file(_uid_chk, _saved[0])
+                            if _fdata:
+                                import io as _io
+                                _fobj = _io.BytesIO(_fdata)
+                                _fobj.name = _saved[0]
+                                _pw = ""
+                                df = process_file(_fobj, _pw)
+                                st.session_state.user_df = df
+                                st.session_state.analysis_done = True
+                                st.session_state.forecast_cache = None
+                                st.session_state.forecast_df_id = None
+                                st.rerun()
+                            else:
+                                st.error("Failed to download file from cloud.")
+                    st.markdown('<div style="text-align:center;color:rgba(255,255,255,0.2);font-size:12px;margin:12px 0">— or upload a new file below —</div>', unsafe_allow_html=True)
             uploaded = st.file_uploader("", type=["csv", "xlsx", "xls", "pdf"], label_visibility="collapsed")
             pdf_password = ""
             if uploaded and uploaded.name.lower().endswith(".pdf"):
@@ -1090,23 +1100,18 @@ else:
                             st.success("✅ Analysis complete! Found " + str(len(df)) + " transactions.")
                             if st.session_state.get("auth_user"):
                                 _uid=st.session_state.auth_user["user_id"]
-                                _save_err = None
-                                for _mp,_mdf in df.groupby(df["DATE"].dt.to_period("M").astype(str)):
-                                    _sr = _save_month(_uid,str(_mp),_mdf)
-                                    if not _sr["ok"]:
-                                        _save_err = _sr.get("error","Unknown error")
-                                if _save_err is None:
-                                    st.success("☁️ Data saved to cloud — it will persist across sessions.")
+                                uploaded.seek(0)
+                                _sr = _save_file(_uid,uploaded.name,uploaded.read())
+                                if _sr["ok"]:
+                                    st.success("☁️ Statement saved to cloud — available after logout.")
                                 else:
-                                    st.warning("⚠️ Cloud save failed: " + _save_err)
+                                    st.warning("⚠️ Cloud save failed: " + _sr.get("error",""))
                         except Exception as e:
                             st.error("❌ " + str(e))
         with c2:
             st.markdown('<div class="glass" style="margin-top:72px;"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px;margin-bottom:16px;">AUTO-DETECTED COLUMNS</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><tr style="color:rgba(255,255,255,0.3);"><td style="padding:6px 0;font-family:DM Mono,monospace;">Required As</td><td style="padding:6px 0;font-family:DM Mono,monospace;">Also Accepted</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:#00f5a0;font-family:DM Mono,monospace;font-size:11px;">DATE</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Transaction Date, Timestamp</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:#00f5a0;font-family:DM Mono,monospace;font-size:11px;">TRANSACTION DETAILS</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Narration, Type, Category</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:#00f5a0;font-family:DM Mono,monospace;font-size:11px;">WITHDRAWAL AMT</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Debit, Debit Amt, DR</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:rgba(255,255,255,0.5);font-family:DM Mono,monospace;font-size:11px;">DEPOSIT AMT</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Credit, Credit Amt, CR</td></tr><tr style="border-top:1px solid rgba(255,255,255,0.06);"><td style="padding:8px 0;color:rgba(255,255,255,0.5);font-family:DM Mono,monospace;font-size:11px;">BALANCE AMT</td><td style="padding:8px 0;color:rgba(255,255,255,0.4);font-size:11px;">Balance, Closing Balance</td></tr></table></div>', unsafe_allow_html=True)
 
         if st.session_state.get("analysis_done") and st.session_state.get("user_df") is not None:
-            if not uploaded:
-                st.info("☁️ Your previously uploaded statement was loaded from the cloud.")
             df = st.session_state.user_df
             st.markdown("<hr class='divider'>", unsafe_allow_html=True)
             # ── Guardrails FIRST (so anomaly count is correct) ──
