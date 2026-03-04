@@ -958,18 +958,66 @@ else:
                 with col:
                     st.markdown("<div class='metric-card'><div class='metric-val'>" + val + "</div><div class='metric-lbl'>" + lbl + "</div></div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
+            # ── User Guardrails ──────────────────────────────────
+            st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#f59e0b;letter-spacing:2px;margin-bottom:12px">⚙️ YOUR GUARDRAILS</div>', unsafe_allow_html=True)
+            _wd_vals = df[df["WITHDRAWAL AMT"] > 0]["WITHDRAWAL AMT"]
+            _default_txn = int(round(_wd_vals.quantile(0.95) / 100) * 100) if len(_wd_vals) > 10 else 10000
+            _monthly_spend = df.groupby(df["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum()
+            _default_monthly = int(round(_monthly_spend.quantile(0.85) / 1000) * 1000) if len(_monthly_spend) > 2 else 50000
+            _gc1, _gc2, _gc3 = st.columns([1, 1, 1])
+            _guard_txn = _gc1.number_input(
+                "Flag transactions above",
+                min_value=1000, max_value=10000000, value=_default_txn, step=1000,
+                key="guard_txn", help="Any single transaction above this amount will be flagged")
+            _guard_monthly = _gc2.number_input(
+                "Monthly budget limit",
+                min_value=5000, max_value=100000000, value=_default_monthly, step=5000,
+                key="guard_monthly", help="Flag months where total spending exceeds this")
+            _guard_cats = _gc3.multiselect(
+                "Watch these categories",
+                options=sorted(df["CATEGORY"].unique()),
+                default=[], key="guard_cats",
+                help="Flag any transaction in these categories")
+            # Apply user guardrails on top of contextual engine
+            _g_flagged_idx = set()
+            for _gi, _grow in df.iterrows():
+                _reasons = []
+                if _grow["WITHDRAWAL AMT"] >= _guard_txn:
+                    _reasons.append(f"Amount ₹{_grow['WITHDRAWAL AMT']:,.0f} exceeds your ₹{_guard_txn:,.0f} limit")
+                if _guard_cats and _grow["CATEGORY"] in _guard_cats and _grow["WITHDRAWAL AMT"] > 0:
+                    _reasons.append(f"Category '{_grow['CATEGORY']}' is on your watch list")
+                if _reasons:
+                    _g_flagged_idx.add(_gi)
+                    if df.at[_gi, "ALERT_LEVEL"] < 2:
+                        df.at[_gi, "ALERT_LEVEL"] = 2
+                        df.at[_gi, "ALERT_REASON"] = " | ".join(_reasons)
+            # Flag months over budget
+            _monthly_totals = df.groupby(df["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum()
+            _over_budget_months = _monthly_totals[_monthly_totals > _guard_monthly]
+            if len(_over_budget_months) > 0:
+                for _obm in _over_budget_months.index:
+                    _ob_rows = df[(df["DATE"].dt.to_period("M") == _obm) & (df["WITHDRAWAL AMT"] > 0)]
+                    if not _ob_rows.empty:
+                        _top_idx = _ob_rows["WITHDRAWAL AMT"].idxmax()
+                        if df.at[_top_idx, "ALERT_LEVEL"] < 1:
+                            df.at[_top_idx, "ALERT_LEVEL"] = 1
+                            df.at[_top_idx, "ALERT_REASON"] = f"Monthly spend ₹{_monthly_totals[_obm]:,.0f} exceeds your ₹{_guard_monthly:,.0f} budget"
+            df["IS_ANOMALY"] = (df["ALERT_LEVEL"] > 0).astype(int)
+            st.session_state.user_df = df
             # ── Flagged Transactions (show prominently if any) ──
             _flagged = df[df["ALERT_LEVEL"] > 0].sort_values("ALERT_LEVEL", ascending=False)
-            if len(_flagged) > 0:
-                st.markdown(f'<div style="font-family:DM Mono,monospace;font-size:11px;color:#ff4d6d;letter-spacing:2px;margin-bottom:12px">🚨 FLAGGED TRANSACTIONS — {len(_flagged)} SUSPICIOUS</div>', unsafe_allow_html=True)
+            _total_flagged = len(_flagged)
+            if _total_flagged > 0:
+                st.markdown(f'<div style="font-family:DM Mono,monospace;font-size:11px;color:#ff4d6d;letter-spacing:2px;margin-bottom:12px">🚨 FLAGGED TRANSACTIONS — {_total_flagged} SUSPICIOUS</div>', unsafe_allow_html=True)
                 _fdisp = _flagged[["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "CATEGORY", "ALERT_LEVEL", "ALERT_REASON"]].copy()
-                _fdisp["ALERT_LEVEL"] = _fdisp["ALERT_LEVEL"].map({1:"🔵 Info",2:"🟡 Soft Alert",3:"🔴 Hard Alert"})
+                _fdisp["ALERT_LEVEL"] = _fdisp["ALERT_LEVEL"].map({0:"✅ Clean",1:"🔵 Budget",2:"🟡 Guardrail",3:"🔴 Hard Alert"})
                 _fdisp["WITHDRAWAL AMT"] = _fdisp["WITHDRAWAL AMT"].apply(lambda x: cfmt(x, None))
                 st.dataframe(_fdisp, use_container_width=True, hide_index=True)
-                st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:12px">RECENT TRANSACTIONS</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div style="padding:16px;background:rgba(0,245,160,0.06);border:1px solid rgba(0,245,160,0.15);border-radius:12px;margin-bottom:12px"><span style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0">✅ No suspicious transactions found. Adjust guardrails above to set stricter limits.</span></div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin:16px 0 12px">RECENT TRANSACTIONS</div>', unsafe_allow_html=True)
             disp = df[["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "DEPOSIT AMT", "CATEGORY", "ALERT_LEVEL"]].head(20).copy()
-            disp["ALERT_LEVEL"] = disp["ALERT_LEVEL"].map({0:"✅ Clean",1:"🔵 Info",2:"🟡 Soft",3:"🔴 Hard"})
+            disp["ALERT_LEVEL"] = disp["ALERT_LEVEL"].map({0:"✅ Clean",1:"🔵 Budget",2:"🟡 Guardrail",3:"🔴 Hard"})
             disp["WITHDRAWAL AMT"] = disp["WITHDRAWAL AMT"].apply(lambda x: cfmt(x, None))
             disp["DEPOSIT AMT"]    = disp["DEPOSIT AMT"].apply(lambda x: cfmt(x, None))
             st.dataframe(disp, use_container_width=True, hide_index=True)
