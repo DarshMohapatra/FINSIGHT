@@ -6,8 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import os
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
 from groq import Groq
 try:
     import pdfplumber
@@ -587,10 +585,7 @@ def process_file(uploaded, pdf_password=""):
     df["CATEGORY"] = df["TRANSACTION DETAILS"].apply(categorize)
 
     # ── Anomaly Detection ─────────────────────────────────────────
-    feats = df[["WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"]].copy()
-    sc = StandardScaler()
-    fs = sc.fit_transform(feats)
-    # ── Contextual Flagging Engine (replaces Isolation Forest) ──
+    # ── Contextual Flagging Engine ──
     _cat_type_map = {}
     _sp = df[df["WITHDRAWAL AMT"]>0].copy()
     _sp["_MP"] = _sp["DATE"].dt.to_period("M")
@@ -1444,4 +1439,4 @@ else:
                 st.markdown(f'<div style="margin:20px 0;padding:14px 18px;background:rgba(255,255,255,0.02);border-left:3px solid rgba(255,255,255,0.1);border-radius:0 8px 8px 0"><span style="font-size:10px;color:rgba(255,255,255,0.25);font-family:DM Mono,monospace;line-height:1.6">&#9878; SEBI DISCLAIMER · {MU_DISCLAIMER}</span></div>', unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · ISOLATION FOREST + TREND FORECAST + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
+    st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · CONTEXTUAL FLAGGING + TREND FORECAST + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
