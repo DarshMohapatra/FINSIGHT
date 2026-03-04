@@ -47,6 +47,12 @@ try:
     def _delete_user(uid):
         try: _sb.table("users").delete().eq("id",uid).execute(); return True
         except: return False
+    def _reset_password(email, new_pw):
+        email = email.strip().lower()
+        r = _sb.table("users").select("id").eq("email", email).execute()
+        if not r.data: return {"success": False, "error": "Email not found."}
+        _sb.table("users").update({"password_hash": _hash_pw(new_pw)}).eq("email", email).execute()
+        return {"success": True}
     SUPABASE_OK = True
 except Exception as _sbe:
     SUPABASE_OK = False
@@ -55,6 +61,7 @@ except Exception as _sbe:
     def _save_month(*a,**k): return False
     def _load_statements(*a,**k): return pd.DataFrame()
     def _delete_user(*a,**k): return False
+    def _reset_password(*a,**k): return {"success":False,"error":"Auth unavailable"}
 
 try:
     import pdfplumber
@@ -939,7 +946,10 @@ if st.session_state.page == "landing":
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("⚡ Launch App — Analyze My Finances", use_container_width=True):
-            st.session_state.page = "auth"
+            if st.session_state.get("auth_user"):
+                st.session_state.page = "app"
+            else:
+                st.session_state.page = "auth"
             st.rerun()
 elif st.session_state.page == "auth":
     _ac1,_ac2,_ac3 = st.columns([1,2,1])
@@ -971,6 +981,24 @@ elif st.session_state.page == "auth":
                         st.error("❌ " + _res["error"])
                 else:
                     st.warning("Please enter email and password.")
+            with st.expander("🔒 Forgot Password?"):
+                _fp_email = st.text_input("Enter your registered email", placeholder="you@example.com", key="fp_email")
+                _fp_new = st.text_input("New Password", type="password", placeholder="Min 8 characters", key="fp_new")
+                _fp_conf = st.text_input("Confirm New Password", type="password", placeholder="••••••••", key="fp_conf")
+                if st.button("Reset Password", use_container_width=True, key="btn_fp_reset"):
+                    if not _fp_email or not _fp_new or not _fp_conf:
+                        st.warning("Please fill all fields.")
+                    elif _fp_new != _fp_conf:
+                        st.error("Passwords do not match.")
+                    elif len(_fp_new) < 8:
+                        st.error("Password must be at least 8 characters.")
+                    else:
+                        with st.spinner("Resetting password..."):
+                            _fp_res = _reset_password(_fp_email, _fp_new)
+                        if _fp_res["success"]:
+                            st.success("Password reset successfully! You can now log in.")
+                        else:
+                            st.error("❌ " + _fp_res.get("error", "Reset failed."))
         with _t2:
             st.markdown("<br>", unsafe_allow_html=True)
             _sn  = st.text_input("Full Name", placeholder="Your name", key="signup_name")
@@ -1011,7 +1039,7 @@ else:
             st.rerun()
     st.markdown("<hr class='divider'>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📤  UPLOAD", "📊  DASHBOARD", "📈  FORECAST", "🤖  AI ADVISOR", "💳  SMARTCASH", "💰  INVEST"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📤  UPLOAD", "📊  DASHBOARD", "📈  FORECAST", "🤖  AI ADVISOR", "💳  SMARTCASH", "💰  INVEST", "👤  PROFILE"])
 
     with tab1:
         c1, c2 = st.columns([2, 1])
@@ -1650,6 +1678,43 @@ else:
 </div>''', unsafe_allow_html=True)
             if MU_DISCLAIMER:
                 st.markdown(f'<div style="margin:20px 0;padding:14px 18px;background:rgba(255,255,255,0.02);border-left:3px solid rgba(255,255,255,0.1);border-radius:0 8px 8px 0"><span style="font-size:10px;color:rgba(255,255,255,0.25);font-family:DM Mono,monospace;line-height:1.6">&#9878; SEBI DISCLAIMER · {MU_DISCLAIMER}</span></div>', unsafe_allow_html=True)
+
+    with tab7:
+        st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">ACCOUNT</div><div style="font-size:26px;font-weight:800;margin-bottom:24px">👤 Profile</div></div>', unsafe_allow_html=True)
+        _au = st.session_state.get("auth_user")
+        if _au:
+            _pc1, _pc2 = st.columns([2, 1])
+            with _pc1:
+                st.markdown(f'''<div class="glass">
+<div style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:2px;margin-bottom:16px">YOUR DETAILS</div>
+<div style="margin-bottom:12px"><span style="color:rgba(255,255,255,0.4);font-size:12px;font-family:DM Mono,monospace">NAME</span><br><span style="font-size:18px;font-weight:700">{_au.get("display_name","—")}</span></div>
+<div style="margin-bottom:12px"><span style="color:rgba(255,255,255,0.4);font-size:12px;font-family:DM Mono,monospace">AGE</span><br><span style="font-size:18px;font-weight:700">{_au.get("age","—")}</span></div>
+<div><span style="color:rgba(255,255,255,0.4);font-size:12px;font-family:DM Mono,monospace">USER ID</span><br><span style="font-size:12px;font-family:DM Mono,monospace;color:rgba(255,255,255,0.25)">{_au.get("user_id","—")}</span></div>
+</div>''', unsafe_allow_html=True)
+            with _pc2:
+                st.markdown("<br><br>", unsafe_allow_html=True)
+                if st.button("🚪 Logout", use_container_width=True, key="btn_logout"):
+                    for k in ["auth_user", "user_df", "analysis_done", "forecast_cache", "forecast_df_id"]:
+                        st.session_state.pop(k, None)
+                    st.session_state.page = "landing"
+                    st.rerun()
+                st.markdown("<br>", unsafe_allow_html=True)
+                with st.expander("⚠️ Danger Zone"):
+                    st.markdown('<p style="color:rgba(255,60,100,0.8);font-size:12px;">This will permanently delete your account and all saved data.</p>', unsafe_allow_html=True)
+                    if st.button("🗑️ Delete Account", use_container_width=True, key="btn_delete_acct"):
+                        _del_ok = _delete_user(_au["user_id"])
+                        if _del_ok:
+                            for k in ["auth_user", "user_df", "analysis_done", "forecast_cache", "forecast_df_id"]:
+                                st.session_state.pop(k, None)
+                            st.session_state.page = "landing"
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete account. Please try again.")
+        else:
+            st.info("You are not logged in.")
+            if st.button("🔑 Go to Login", use_container_width=True, key="btn_goto_login"):
+                st.session_state.page = "auth"
+                st.rerun()
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:60px;padding:24px 40px;"><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:2px;">FINSIGHT · CONTEXTUAL FLAGGING + TREND FORECAST + LLAMA 3.3 70B</span></div>', unsafe_allow_html=True)
