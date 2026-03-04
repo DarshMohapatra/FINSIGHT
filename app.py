@@ -933,6 +933,14 @@ def compute_yir_data(df):
         }
     return result
 
+if st.session_state.page == "landing":
+    components.html(LANDING_HTML, height=2400, scrolling=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("⚡ Launch App — Analyze My Finances", use_container_width=True):
+            st.session_state.page = "auth"
+            st.rerun()
 elif st.session_state.page == "auth":
     _ac1,_ac2,_ac3 = st.columns([1,2,1])
     with _ac2:
@@ -957,7 +965,7 @@ elif st.session_state.page == "auth":
                             st.session_state.analysis_done = True
                             st.session_state.forecast_cache = None
                             st.session_state.forecast_df_id = None
-                        st.session_state.page = "auth"
+                        st.session_state.page = "app"
                         st.rerun()
                     else:
                         st.error("❌ " + _res["error"])
@@ -990,15 +998,6 @@ elif st.session_state.page == "auth":
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("← Back to Home", key="btn_auth_back"):
             st.session_state.page = "landing"
-            st.rerun()
-
-if st.session_state.page == "landing":
-    components.html(LANDING_HTML, height=2400, scrolling=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("⚡ Launch App — Analyze My Finances", use_container_width=True):
-            st.session_state.page = "app"
             st.rerun()
 else:
     st.markdown("<div class='app-wrap'>", unsafe_allow_html=True)
@@ -1048,10 +1047,10 @@ else:
                             st.session_state.pop("sc_results", None)
                             st.session_state.pop("sc_cat", None)
                             st.success("✅ Analysis complete! Found " + str(len(df)) + " transactions.")
-                        if st.session_state.get("auth_user"):
-                            _uid=st.session_state.auth_user["user_id"]
-                            for _mp,_mdf in df.groupby(df["DATE"].dt.to_period("M")):
-                                _save_month(_uid,str(_mp),_mdf)
+                            if st.session_state.get("auth_user"):
+                                _uid=st.session_state.auth_user["user_id"]
+                                for _mp,_mdf in df.groupby(df["DATE"].dt.to_period("M")):
+                                    _save_month(_uid,str(_mp),_mdf)
                         except Exception as e:
                             st.error("❌ " + str(e))
         with c2:
