@@ -33,23 +33,26 @@ try:
         if not _verify_pw(password,u["password_hash"]): return {"success":False,"error":"Incorrect password."}
         prefs=_sb.table("user_preferences").select("*").eq("user_id",u["id"]).execute()
         return {"success":True,"user_id":u["id"],"display_name":u["display_name"],"age":u["age"],"prefs":prefs.data[0] if prefs.data else {}}
-    try: _sb.storage.create_bucket("statements",{"public":False})
-    except: pass
+    import base64 as _b64
     def _save_file(uid,name,data):
         try:
-            path=f"{uid}/{name}"
-            try: _sb.storage.from_("statements").remove([path])
-            except: pass
-            _sb.storage.from_("statements").upload(path,data)
+            encoded = _b64.b64encode(data).decode()
+            _sb.table("user_statements").upsert({"user_id":uid,"month_period":"__rawfile__","row_count":0,"data_json":{"filename":name,"b64":encoded}},on_conflict="user_id,month_period").execute()
             return {"ok":True}
         except Exception as _e: return {"ok":False,"error":str(_e)}
     def _list_files(uid):
         try:
-            fs=_sb.storage.from_("statements").list(str(uid))
-            return [f["name"] for f in fs if f.get("name")] if fs else []
+            r=_sb.table("user_statements").select("data_json").eq("user_id",uid).eq("month_period","__rawfile__").execute()
+            if r.data and r.data[0].get("data_json",{}).get("filename"):
+                return [r.data[0]["data_json"]["filename"]]
+            return []
         except: return []
     def _download_file(uid,name):
-        try: return _sb.storage.from_("statements").download(f"{uid}/{name}")
+        try:
+            r=_sb.table("user_statements").select("data_json").eq("user_id",uid).eq("month_period","__rawfile__").execute()
+            if r.data and r.data[0].get("data_json",{}).get("b64"):
+                return _b64.b64decode(r.data[0]["data_json"]["b64"])
+            return None
         except: return None
     def _delete_user(uid):
         try: _sb.table("users").delete().eq("id",uid).execute(); return True
