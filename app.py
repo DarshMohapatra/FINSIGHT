@@ -699,11 +699,19 @@ def build_context(df):
     ctx += "Highest Spending Month: " + max_month + "\n"
     ctx += "Lowest Spending Month: " + min_month + "\n"
     ctx += "Anomalies Flagged: " + str(anomalies) + "\n"
+    # Include actual flagged transactions so AI can reference them
+    flagged = df[df["ALERT_LEVEL"] > 0].sort_values("ALERT_LEVEL", ascending=False)
+    if len(flagged) > 0:
+        flag_lines = []
+        for _, frow in flagged.head(15).iterrows():
+            lvl = {1:"Info",2:"Soft Alert",3:"Hard Alert"}.get(frow["ALERT_LEVEL"],"Flag")
+            flag_lines.append(f"  - [{lvl}] {frow['DATE'].strftime('%d %b %Y')} | {str(frow['TRANSACTION DETAILS'])[:40]} | {cfmt(frow['WITHDRAWAL AMT'], None)} | Reason: {frow['ALERT_REASON']}")
+        ctx += "Flagged Transactions (suspicious):\n" + "\n".join(flag_lines) + "\n"
     ctx += "Top Category: " + top_cat + "\n"
     ctx += "Monthly Trend:\n" + " | ".join(trend_parts) + "\n"
     ctx += "Top 5 Largest Withdrawals:\n" + "\n".join(top5_lines) + "\n"
     ctx += "Category Breakdown:\n" + "\n".join(cat_parts) + "\n"
-    ctx += "IMPORTANT: Use ONLY this data. Always give specific numbers. Never say data unavailable. Be concise, friendly and actionable."
+    ctx += "IMPORTANT: Use ONLY this data. Always give specific numbers. Never say data unavailable. Be concise, friendly and actionable. When asked about anomalies or suspicious transactions, list the exact flagged transactions with their dates, amounts, and reasons."
     return ctx
 
 
@@ -935,7 +943,17 @@ else:
                 with col:
                     st.markdown("<div class='metric-card'><div class='metric-val'>" + val + "</div><div class='metric-lbl'>" + lbl + "</div></div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
-            disp = df[["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "DEPOSIT AMT", "CATEGORY", "ALERT_LEVEL", "ALERT_REASON"]].head(20).copy()
+            # ── Flagged Transactions (show prominently if any) ──
+            _flagged = df[df["ALERT_LEVEL"] > 0].sort_values("ALERT_LEVEL", ascending=False)
+            if len(_flagged) > 0:
+                st.markdown(f'<div style="font-family:DM Mono,monospace;font-size:11px;color:#ff4d6d;letter-spacing:2px;margin-bottom:12px">🚨 FLAGGED TRANSACTIONS — {len(_flagged)} SUSPICIOUS</div>', unsafe_allow_html=True)
+                _fdisp = _flagged[["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "CATEGORY", "ALERT_LEVEL", "ALERT_REASON"]].copy()
+                _fdisp["ALERT_LEVEL"] = _fdisp["ALERT_LEVEL"].map({1:"🔵 Info",2:"🟡 Soft Alert",3:"🔴 Hard Alert"})
+                _fdisp["WITHDRAWAL AMT"] = _fdisp["WITHDRAWAL AMT"].apply(lambda x: cfmt(x, None))
+                st.dataframe(_fdisp, use_container_width=True, hide_index=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown('<div style="font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:12px">RECENT TRANSACTIONS</div>', unsafe_allow_html=True)
+            disp = df[["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "DEPOSIT AMT", "CATEGORY", "ALERT_LEVEL"]].head(20).copy()
             disp["ALERT_LEVEL"] = disp["ALERT_LEVEL"].map({0:"✅ Clean",1:"🔵 Info",2:"🟡 Soft",3:"🔴 Hard"})
             disp["WITHDRAWAL AMT"] = disp["WITHDRAWAL AMT"].apply(lambda x: cfmt(x, None))
             disp["DEPOSIT AMT"]    = disp["DEPOSIT AMT"].apply(lambda x: cfmt(x, None))
