@@ -7,6 +7,55 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import os
 from groq import Groq
+
+# ── Supabase auth ────────────────────────────────────────────
+try:
+    from supabase import create_client as _sb_create
+    import bcrypt as _bcrypt
+    _sb = _sb_create("https://rvgmqmfmbknxxdyqpcgz.supabase.co","sb_publishable_o3mTNEv-ejXYaCyEjI8slQ_c9zxoahn")
+    def _hash_pw(p): return _bcrypt.hashpw(p.encode(),_bcrypt.gensalt()).decode()
+    def _verify_pw(p,h): return _bcrypt.checkpw(p.encode(),h.encode())
+    def _signup(email,password,name,age):
+        email=email.strip().lower()
+        if _sb.table("users").select("id").eq("email",email).execute().data:
+            return {"success":False,"error":"Email already registered."}
+        try:
+            r=_sb.table("users").insert({"email":email,"display_name":name,"age":age,"password_hash":_hash_pw(password)}).execute()
+            uid=r.data[0]["id"]
+            _sb.table("user_preferences").insert({"user_id":uid}).execute()
+            return {"success":True,"user_id":uid,"display_name":name,"age":age,"prefs":{}}
+        except Exception as e: return {"success":False,"error":str(e)}
+    def _login(email,password):
+        email=email.strip().lower()
+        r=_sb.table("users").select("id,display_name,age,password_hash").eq("email",email).execute()
+        if not r.data: return {"success":False,"error":"Email not found."}
+        u=r.data[0]
+        if not _verify_pw(password,u["password_hash"]): return {"success":False,"error":"Incorrect password."}
+        prefs=_sb.table("user_preferences").select("*").eq("user_id",u["id"]).execute()
+        return {"success":True,"user_id":u["id"],"display_name":u["display_name"],"age":u["age"],"prefs":prefs.data[0] if prefs.data else {}}
+    def _save_month(uid,month,df_m):
+        import json as _j
+        try:
+            _sb.table("user_statements").upsert({"user_id":uid,"month_period":month,"row_count":len(df_m),"data_json":_j.loads(df_m.to_json(orient="records",date_format="iso"))},on_conflict="user_id,month_period").execute()
+            return True
+        except: return False
+    def _load_statements(uid):
+        r=_sb.table("user_statements").select("data_json,month_period").eq("user_id",uid).order("month_period").execute()
+        if not r.data: return pd.DataFrame()
+        df=pd.concat([pd.DataFrame(row["data_json"]) for row in r.data],ignore_index=True)
+        df["DATE"]=pd.to_datetime(df["DATE"]); return df
+    def _delete_user(uid):
+        try: _sb.table("users").delete().eq("id",uid).execute(); return True
+        except: return False
+    SUPABASE_OK = True
+except Exception as _sbe:
+    SUPABASE_OK = False
+    def _signup(*a,**k): return {"success":False,"error":"Auth unavailable"}
+    def _login(*a,**k): return {"success":False,"error":"Auth unavailable"}
+    def _save_month(*a,**k): return False
+    def _load_statements(*a,**k): return pd.DataFrame()
+    def _delete_user(*a,**k): return False
+
 try:
     import pdfplumber
     PDF_OK = True
@@ -884,6 +933,65 @@ def compute_yir_data(df):
         }
     return result
 
+elif st.session_state.page == "auth":
+    _ac1,_ac2,_ac3 = st.columns([1,2,1])
+    with _ac2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown('<div style="text-align:center;margin-bottom:32px"><span style="font-size:36px;font-weight:900">⚡<span style="background:linear-gradient(135deg,#00f5a0,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent">FinSight</span></span><br><span style="font-family:DM Mono,monospace;font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:3px">AI FINANCIAL INTELLIGENCE</span></div>', unsafe_allow_html=True)
+        _t1,_t2 = st.tabs(["🔑  LOGIN","✨  SIGN UP"])
+        with _t1:
+            st.markdown("<br>", unsafe_allow_html=True)
+            _le = st.text_input("Email", placeholder="you@example.com", key="login_email")
+            _lp = st.text_input("Password", type="password", placeholder="••••••••", key="login_pass")
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("⚡ Login to FinSight", use_container_width=True, key="btn_login"):
+                if _le and _lp:
+                    with st.spinner("Verifying..."):
+                        _res = _login(_le, _lp)
+                    if _res["success"]:
+                        st.session_state.auth_user = _res
+                        with st.spinner("Loading your data..."):
+                            _stored = _load_statements(_res["user_id"])
+                        if not _stored.empty:
+                            st.session_state.user_df = _stored
+                            st.session_state.analysis_done = True
+                            st.session_state.forecast_cache = None
+                            st.session_state.forecast_df_id = None
+                        st.session_state.page = "auth"
+                        st.rerun()
+                    else:
+                        st.error("❌ " + _res["error"])
+                else:
+                    st.warning("Please enter email and password.")
+        with _t2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            _sn  = st.text_input("Full Name", placeholder="Your name", key="signup_name")
+            _se  = st.text_input("Email", placeholder="you@example.com", key="signup_email")
+            _sa  = st.number_input("Age", min_value=16, max_value=100, value=25, key="signup_age")
+            _sp  = st.text_input("Password", type="password", placeholder="Min 8 characters", key="signup_pass")
+            _sp2 = st.text_input("Confirm Password", type="password", placeholder="••••••••", key="signup_pass2")
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("✨ Create Account", use_container_width=True, key="btn_signup"):
+                if not all([_sn,_se,_sp,_sp2]):
+                    st.warning("Please fill all fields.")
+                elif _sp != _sp2:
+                    st.error("Passwords do not match.")
+                elif len(_sp) < 8:
+                    st.error("Password must be at least 8 characters.")
+                else:
+                    with st.spinner("Creating account..."):
+                        _res = _signup(_se,_sp,_sn,int(_sa))
+                    if _res["success"]:
+                        st.session_state.auth_user = _res
+                        st.session_state.page = "app"
+                        st.rerun()
+                    else:
+                        st.error("❌ " + _res["error"])
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("← Back to Home", key="btn_auth_back"):
+            st.session_state.page = "landing"
+            st.rerun()
+
 if st.session_state.page == "landing":
     components.html(LANDING_HTML, height=2400, scrolling=True)
     st.markdown("<br>", unsafe_allow_html=True)
@@ -940,6 +1048,10 @@ else:
                             st.session_state.pop("sc_results", None)
                             st.session_state.pop("sc_cat", None)
                             st.success("✅ Analysis complete! Found " + str(len(df)) + " transactions.")
+                        if st.session_state.get("auth_user"):
+                            _uid=st.session_state.auth_user["user_id"]
+                            for _mp,_mdf in df.groupby(df["DATE"].dt.to_period("M")):
+                                _save_month(_uid,str(_mp),_mdf)
                         except Exception as e:
                             st.error("❌ " + str(e))
         with c2:
