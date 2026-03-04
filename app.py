@@ -36,7 +36,15 @@ try:
     def _save_month(uid,month,df_m):
         import json as _j
         try:
-            _sb.table("user_statements").upsert({"user_id":uid,"month_period":month,"row_count":len(df_m),"data_json":_j.loads(df_m.to_json(orient="records",date_format="iso"))},on_conflict="user_id,month_period").execute()
+            _clean = df_m.copy()
+            for _c in _clean.select_dtypes(include=["datetime64","datetimetz"]).columns:
+                _clean[_c] = _clean[_c].dt.strftime("%Y-%m-%d")
+            for _c in _clean.columns:
+                _clean[_c] = _clean[_c].where(_clean[_c].notna(), None)
+                if _clean[_c].dtype.kind in ("i","u","f"):
+                    _clean[_c] = _clean[_c].astype(object).where(_clean[_c].notna(), None)
+            _rows = _j.loads(_j.dumps([{k:(int(v) if isinstance(v,(np.integer,)) else float(v) if isinstance(v,(np.floating,)) else v) for k,v in row.items()} for row in _clean.to_dict(orient="records")]))
+            _sb.table("user_statements").upsert({"user_id":uid,"month_period":month,"row_count":len(df_m),"data_json":_rows},on_conflict="user_id,month_period").execute()
             return {"ok":True}
         except Exception as _e:
             return {"ok":False,"error":str(_e)}
