@@ -652,34 +652,92 @@ def mu_compute_roundups(df, threshold=10):
 
 
 
-# ── Year-in-Review globals ───────────────────────────────────
-import urllib.request as _yiru, json as _yirj
+# ── Year-in-Review: compute dynamically from uploaded data ────
+import calendar as _yir_cal
 
-@st.cache_data(ttl=3600)
-def load_yir_data():
-    _b = "https://raw.githubusercontent.com/DarshMohapatra/FINSIGHT/main/"
-    try:
-        with _yiru.urlopen(_b+"year_in_review.json", timeout=8) as resp:
-            return _yirj.load(resp)
-    except Exception as e:
+def compute_yir_data(df):
+    """Build Year-in-Review dict from the user's uploaded DataFrame."""
+    if df is None or df.empty:
         return {}
-
-YIR_DATA = load_yir_data()
-
-
-# ── Year-in-Review globals ───────────────────────────────────
-import urllib.request as _yiru, json as _yirj
-
-@st.cache_data(ttl=3600)
-def load_yir_data():
-    _b = "https://raw.githubusercontent.com/DarshMohapatra/FINSIGHT/main/"
-    try:
-        with _yiru.urlopen(_b+"year_in_review.json", timeout=8) as resp:
-            return _yirj.load(resp)
-    except Exception as e:
-        return {}
-
-YIR_DATA = load_yir_data()
+    result = {}
+    df = df.copy()
+    df["_year"] = df["DATE"].dt.year
+    for yr, gdf in df.groupby("_year"):
+        spent     = float(gdf["WITHDRAWAL AMT"].sum())
+        received  = float(gdf["DEPOSIT AMT"].sum())
+        net_saved = received - spent
+        total_txns = len(gdf)
+        savings_rate = round(net_saved / received * 100, 1) if received > 0 else 0.0
+        # Top merchant by amount
+        wd = gdf[gdf["WITHDRAWAL AMT"] > 0]
+        if not wd.empty:
+            top_amt = wd.groupby("TRANSACTION DETAILS")["WITHDRAWAL AMT"].sum()
+            top_merchant_name = top_amt.idxmax()
+            top_merchant_amt  = float(top_amt.max())
+        else:
+            top_merchant_name, top_merchant_amt = "—", 0
+        # Top merchant by frequency
+        if not wd.empty:
+            top_freq = wd["TRANSACTION DETAILS"].value_counts()
+            top_freq_name  = top_freq.index[0]
+            top_freq_count = int(top_freq.iloc[0])
+        else:
+            top_freq_name, top_freq_count = "—", 0
+        # Most expensive day
+        daily = gdf.groupby(gdf["DATE"].dt.date)["WITHDRAWAL AMT"].sum()
+        if not daily.empty:
+            exp_day  = str(daily.idxmax())
+            exp_amt  = float(daily.max())
+        else:
+            exp_day, exp_amt = "—", 0
+        # Biggest / quietest month
+        gdf["_month_num"] = gdf["DATE"].dt.month
+        monthly = gdf.groupby("_month_num")["WITHDRAWAL AMT"].sum()
+        month_names = {m: _yir_cal.month_name[m] for m in range(1, 13)}
+        # Fill missing months with 0
+        all_months = pd.Series(0.0, index=range(1, 13))
+        all_months.update(monthly)
+        big_m  = int(all_months[all_months > 0].idxmax()) if (all_months > 0).any() else 1
+        quiet_m = int(all_months[all_months > 0].idxmin()) if (all_months > 0).any() else 1
+        # Top category
+        if "CATEGORY" in gdf.columns and not wd.empty:
+            cat_spend = wd.groupby("CATEGORY")["WITHDRAWAL AMT"].sum().sort_values(ascending=False)
+            top_cat_name = cat_spend.index[0] if len(cat_spend) > 0 else "—"
+            top_cat_amt  = float(cat_spend.iloc[0]) if len(cat_spend) > 0 else 0
+            top_cat_pct  = round(top_cat_amt / spent * 100, 1) if spent > 0 else 0
+        else:
+            top_cat_name, top_cat_amt, top_cat_pct = "—", 0, 0
+        # Largest single transaction
+        if not wd.empty:
+            largest_idx  = wd["WITHDRAWAL AMT"].idxmax()
+            largest_amt  = float(wd.loc[largest_idx, "WITHDRAWAL AMT"])
+            largest_desc = str(wd.loc[largest_idx, "TRANSACTION DETAILS"])[:25]
+        else:
+            largest_amt, largest_desc = 0, "—"
+        # Anomaly count
+        anomaly_count = int(gdf["IS_ANOMALY"].sum()) if "IS_ANOMALY" in gdf.columns else 0
+        # Monthly spend dict
+        monthly_spend = {}
+        for m in range(1, 13):
+            monthly_spend[month_names[m]] = float(all_months.get(m, 0))
+        result[str(yr)] = {
+            "year": int(yr),
+            "total_txns": total_txns,
+            "total_spent": spent,
+            "total_received": received,
+            "net_saved": net_saved,
+            "savings_rate": savings_rate,
+            "top_merchant_by_amount": {"name": top_merchant_name, "amount": top_merchant_amt},
+            "top_merchant_by_frequency": {"name": top_freq_name, "count": top_freq_count},
+            "most_expensive_day": {"date": exp_day, "amount": exp_amt},
+            "biggest_month": {"name": month_names[big_m], "amount": float(all_months[big_m])},
+            "quietest_month": {"name": month_names[quiet_m], "amount": float(all_months[quiet_m])},
+            "top_category": {"name": top_cat_name, "pct": top_cat_pct},
+            "largest_txn": {"amount": largest_amt, "desc": largest_desc},
+            "anomaly_count": anomaly_count,
+            "monthly_spend": monthly_spend
+        }
+    return result
 
 if st.session_state.page == "landing":
     components.html(LANDING_HTML, height=2400, scrolling=True)
@@ -763,7 +821,8 @@ else:
             st.dataframe(disp, use_container_width=True, hide_index=True)
 
     with tab2:
-        # ── Year-in-Review ─────────────────────────────────────────
+        # ── Year-in-Review (computed from uploaded data) ──────────
+        YIR_DATA = compute_yir_data(st.session_state.get("user_df"))
         _yir_years = sorted([int(k) for k in YIR_DATA.keys()], reverse=True) if YIR_DATA else []
         if _yir_years:
             _yir_c1, _yir_c2 = st.columns([3,1])
