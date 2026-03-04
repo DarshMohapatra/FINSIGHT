@@ -130,16 +130,65 @@ def sc_summary(rdf):
 
 def categorize(desc):
     d = str(desc).upper()
+    # Income & transfers
     if any(k in d for k in ["SALARY", "SAL ", "PAYROLL", "GIBL"]): return "Salary"
-    elif any(k in d for k in ["TRF FROM", "TRANSFER IN", "IMPS/CR", "NEFT/CR"]): return "Transfer In"
-    elif any(k in d for k in ["TRF TO", "TRANSFER OUT"]): return "Transfer Out"
-    elif any(k in d for k in ["NEFT", "RTGS", "IMPS"]): return "Online Payment"
-    elif any(k in d for k in ["CASHDEP", "CASH DEP", "CASH DEPOSIT"]): return "Cash Deposit"
-    elif any(k in d for k in ["ATM", "CDM", "CASHWDL", "CASH WDL"]): return "ATM/Cash Withdrawal"
+    elif any(k in d for k in ["TRF FROM", "TRANSFER IN", "IMPS/CR", "NEFT/CR", "CREDIT INTEREST"]): return "Transfer In"
+    elif any(k in d for k in ["TRF TO", "TRANSFER OUT", "FUND TRANSFE"]): return "Transfer Out"
+    # Digital payments
     elif "UPI" in d: return "UPI Payment"
-    elif any(k in d for k in ["CHQ", "CHEQUE", "CHECK"]): return "Cheque"
-    elif any(k in d for k in ["EMI", "LOAN", "MORTGAGE"]): return "Loan/EMI"
-    elif any(k in d for k in ["TAX", "GST", "GOVT", "TDS"]): return "Tax/Government"
+    elif any(k in d for k in ["NEFT", "RTGS", "IMPS"]): return "Online Payment"
+    # Cash
+    elif any(k in d for k in ["CASHDEP", "CASH DEP", "CASH DEPOSIT"]): return "Cash Deposit"
+    elif any(k in d for k in ["ATM", "CDM", "CASHWDL", "CASH WDL", "CASH WITHDRAWAL"]): return "ATM/Cash Withdrawal"
+    # Cheque
+    elif any(k in d for k in ["CHQ", "CHEQUE", "CHECK", "CLG"]): return "Cheque"
+    # Loans & EMI
+    elif any(k in d for k in ["EMI", "LOAN", "MORTGAGE", "REPAYMENT"]): return "Loan/EMI"
+    # Tax & Government
+    elif any(k in d for k in ["TAX", "GST", "GOVT", "TDS", "INCOME TAX", "MCA", "EPFO", "PF"]): return "Tax/Government"
+    # Shopping & E-commerce
+    elif any(k in d for k in ["AMAZON", "FLIPKART", "MYNTRA", "AJIO", "MEESHO", "SNAPDEAL",
+        "SHOPPERS", "BIGBASKET", "BLINKIT", "ZEPTO", "JIOMART", "DMART", "GROFERS",
+        "RELIANCE RETAIL", "TATA CLIQ", "NYKAA", "CROMA", "VIJAY SALES"]): return "Shopping"
+    # Food & Dining
+    elif any(k in d for k in ["SWIGGY", "ZOMATO", "DOMINOS", "MCDONALD", "KFC", "PIZZA",
+        "STARBUCKS", "BURGER", "RESTAURANT", "FOOD", "CAFE", "DINING", "DUNZO",
+        "EATSURE", "FAASOS", "HALDIRAM", "BARBEQUE"]): return "Food & Dining"
+    # Travel & Transport
+    elif any(k in d for k in ["UBER", "OLA", "RAPIDO", "IRCTC", "MAKEMYTRIP", "GOIBIBO",
+        "CLEARTRIP", "REDBUS", "YATRA", "FLIGHT", "AIRLINE", "INDIGO", "SPICEJET",
+        "RAILWAY", "METRO", "PETROL", "FUEL", "BPCL", "HPCL", "IOCL", "FASTAG",
+        "PARKING", "TOLL"]): return "Travel & Transport"
+    # Bills & Utilities
+    elif any(k in d for k in ["ELECTRIC", "ELECTRICITY", "WATER BILL", "GAS BILL", "BESCOM",
+        "TATA POWER", "ADANI", "BROADBAND", "INTERNET", "WIFI", "ACT FIBERNET",
+        "AIRTEL", "JIO", "VODAFONE", "VI ", "BSNL", "MOBILE RECHARGE", "RECHARGE",
+        "DTH", "TATA SKY", "DISH TV", "POSTPAID", "PREPAID"]): return "Bills & Utilities"
+    # Insurance
+    elif any(k in d for k in ["INSURANCE", "LIC ", "HDFC LIFE", "ICICI PRUDENTIAL",
+        "SBI LIFE", "POLICY", "PREMIUM", "HEALTH INSURANCE", "STAR HEALTH",
+        "MAX LIFE", "BAJAJ ALLIANZ"]): return "Insurance"
+    # Subscriptions & Entertainment
+    elif any(k in d for k in ["NETFLIX", "HOTSTAR", "PRIME VIDEO", "SPOTIFY", "YOUTUBE",
+        "DISNEY", "SONY LIV", "ZEE5", "APPLE", "GOOGLE PLAY", "SUBSCRIPTION",
+        "MEMBERSHIP", "GYM", "CULT FIT", "AUDIBLE"]): return "Subscriptions"
+    # Education
+    elif any(k in d for k in ["SCHOOL", "COLLEGE", "UNIVERSITY", "TUITION", "COURSE",
+        "UDEMY", "COURSERA", "UNACADEMY", "BYJU", "EDUCATION", "EXAM FEE",
+        "UPGRAD"]): return "Education"
+    # Rent & Housing
+    elif any(k in d for k in ["RENT", "HOUSE RENT", "PG RENT", "MAINTENANCE", "SOCIETY"]): return "Rent & Housing"
+    # Medical & Health
+    elif any(k in d for k in ["HOSPITAL", "PHARMACY", "MEDICAL", "DOCTOR", "CLINIC",
+        "APOLLO", "MEDPLUS", "1MG", "PHARMEASY", "NETMEDS", "DIAGNOSTIC",
+        "PATHLAB", "DENTAL"]): return "Medical & Health"
+    # Investments
+    elif any(k in d for k in ["MUTUAL FUND", "SIP ", "ZERODHA", "GROWW", "KUVERA",
+        "DEMAT", "SHARE", "STOCK", "NSE ", "BSE ", "COIN ", "IPO",
+        "SMALLCASE", "PPF", "NPS", "FD ", "FIXED DEPOSIT", "RD "]): return "Investments"
+    # Bank charges
+    elif any(k in d for k in ["SERVICE CHARGE", "BANK CHARGE", "ANNUAL FEE", "LATE FEE",
+        "PENALTY", "INTEREST CHARGED", "DEBIT INTEREST", "MIN BAL"]): return "Bank Charges"
     else: return "Other"
 
 
@@ -861,11 +910,21 @@ else:
         if st.session_state.user_df is None:
             st.markdown('<div style="text-align:center;padding:100px 0;"><div style="font-size:56px;margin-bottom:16px;">📤</div><div style="font-family:DM Mono,monospace;font-size:12px;color:rgba(255,255,255,0.2);letter-spacing:2px;">UPLOAD A FILE FIRST</div></div>', unsafe_allow_html=True)
         else:
-            df = st.session_state.user_df
-            st.markdown('<div style="padding:28px 0 0;font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:20px;">YOUR FINANCIAL DASHBOARD</div>', unsafe_allow_html=True)
+            df_full = st.session_state.user_df
+            # Year filter tied to Year-in-Review
+            _dash_years = sorted(df_full["DATE"].dt.year.dropna().unique(), reverse=True)
+            _dc1, _dc2 = st.columns([3,1])
+            _dc1.markdown('<div style="padding:28px 0 0;font-family:DM Mono,monospace;font-size:11px;color:#00f5a0;letter-spacing:2px;margin-bottom:20px;">YOUR FINANCIAL DASHBOARD</div>', unsafe_allow_html=True)
+            _dash_opt = ["All Years"] + [str(y) for y in _dash_years]
+            _dash_sel = _dc2.selectbox("", _dash_opt, index=0, key="dash_year", label_visibility="collapsed")
+            if _dash_sel != "All Years":
+                df = df_full[df_full["DATE"].dt.year == int(_dash_sel)].copy()
+            else:
+                df = df_full
             fig, axes = dark_fig(2, 2, (16, 10))
-            fig.suptitle("FinSight Financial Dashboard", fontsize=16, fontweight="bold", color="white", y=0.98)
-            pal = ["#00f5a0","#00d4ff","#7b61ff","#ff4d6d","#ffd60a","#ff9f43","#a8e063","#f8a5c2","#778ca3","#2d98da","#4b7bec","#a55eea"]
+            _dash_title = f"FinSight Financial Dashboard — {_dash_sel}" if _dash_sel != "All Years" else "FinSight Financial Dashboard"
+            fig.suptitle(_dash_title, fontsize=16, fontweight="bold", color="white", y=0.98)
+            pal = ["#00f5a0","#00d4ff","#7b61ff","#ff4d6d","#ffd60a","#ff9f43","#a8e063","#f8a5c2","#778ca3","#2d98da","#4b7bec","#a55eea","#e056fd","#c7ecee","#dfe6e9","#fd79a8"]
             mwd = df.groupby(df["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum()
             axes[0,0].plot(range(len(mwd)), mwd.values, color="#00f5a0", linewidth=2.5)
             axes[0,0].fill_between(range(len(mwd)), mwd.values, alpha=0.1, color="#00f5a0")
@@ -874,20 +933,27 @@ else:
             step = max(1, len(mwd)//8)
             axes[0,0].set_xticks(range(0, len(mwd), step))
             axes[0,0].set_xticklabels(mwd.index.astype(str)[::step], rotation=45, ha="right", color="#555", fontsize=8)
-            cc = df["CATEGORY"].value_counts()
-            axes[0,1].barh(cc.index, cc.values, color=pal[:len(cc)])
-            axes[0,1].set_title("Transactions by Category", color="white", fontsize=12, pad=12)
+            # Category by spend amount (not count) — excludes categories with 0 spend
+            cat_spend = df[df["WITHDRAWAL AMT"] > 0].groupby("CATEGORY")["WITHDRAWAL AMT"].sum().sort_values(ascending=True)
+            cat_spend = cat_spend[cat_spend > 0]
+            axes[0,1].barh(cat_spend.index, cat_spend.values, color=pal[:len(cat_spend)])
+            axes[0,1].set_title("Spending by Category", color="white", fontsize=12, pad=12)
             axes[0,1].tick_params(colors="#aaa", labelsize=9)
-            axes[0,1].invert_yaxis()
+            axes[0,1].xaxis.set_major_formatter(mticker.FuncFormatter(cfmt))
             am = df[df["IS_ANOMALY"]==1].groupby("MONTH")["IS_ANOMALY"].count()
             x = list(range(len(am)))
-            axes[1,0].bar(x, am.values, color="#ff4d6d", alpha=0.85, edgecolor="none")
-            axes[1,0].set_title("Anomalies Per Month", color="white", fontsize=12, pad=12)
-            step2 = max(1, len(x)//8)
-            axes[1,0].set_xticks(x[::step2])
-            axes[1,0].set_xticklabels(am.index.astype(str)[::step2], rotation=45, ha="right", color="#555", fontsize=8)
+            if x:
+                axes[1,0].bar(x, am.values, color="#ff4d6d", alpha=0.85, edgecolor="none")
+                axes[1,0].set_title("Anomalies Per Month", color="white", fontsize=12, pad=12)
+                step2 = max(1, len(x)//8)
+                axes[1,0].set_xticks(x[::step2])
+                axes[1,0].set_xticklabels(am.index.astype(str)[::step2], rotation=45, ha="right", color="#555", fontsize=8)
+            else:
+                axes[1,0].set_title("Anomalies Per Month", color="white", fontsize=12, pad=12)
+                axes[1,0].text(0.5, 0.5, "No anomalies", ha="center", va="center", color="#555", fontsize=12, transform=axes[1,0].transAxes)
             wd = df[df["WITHDRAWAL AMT"] > 0]["WITHDRAWAL AMT"]
-            axes[1,1].hist(wd, bins=50, color="#00d4ff", edgecolor="#020408", log=True, alpha=0.9)
+            if len(wd) > 0:
+                axes[1,1].hist(wd, bins=50, color="#00d4ff", edgecolor="#020408", log=True, alpha=0.9)
             axes[1,1].set_title("Withdrawal Distribution (log)", color="white", fontsize=12, pad=12)
             axes[1,1].tick_params(colors="#555")
             plt.tight_layout()
