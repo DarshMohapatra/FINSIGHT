@@ -949,27 +949,46 @@ else:
             df = st.session_state.user_df
             st.markdown("<hr class='divider'>", unsafe_allow_html=True)
             # ── Guardrails FIRST (so anomaly count is correct) ──
-            st.markdown('<div style="margin:20px 0 16px;padding:20px 24px;background:linear-gradient(145deg,rgba(245,158,11,0.06),rgba(245,158,11,0.02));border:1px solid rgba(245,158,11,0.15);border-radius:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="font-size:16px">🔍</span><span style="font-family:DM Mono,monospace;font-size:11px;color:#f59e0b;letter-spacing:2px;font-weight:600">SET YOUR GUARDRAILS</span></div>', unsafe_allow_html=True)
+            st.markdown('<div style="margin:20px 0 4px;padding:20px 24px;background:linear-gradient(145deg,rgba(245,158,11,0.06),rgba(245,158,11,0.02));border:1px solid rgba(245,158,11,0.15);border-radius:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="font-size:16px">🔍</span><span style="font-family:DM Mono,monospace;font-size:11px;color:#f59e0b;letter-spacing:2px;font-weight:600">SET YOUR GUARDRAILS</span><span style="font-size:10px;color:rgba(255,255,255,0.25);margin-left:auto">Set limits → click Scan</span></div>', unsafe_allow_html=True)
             _wd_vals = df[df["WITHDRAWAL AMT"] > 0]["WITHDRAWAL AMT"]
             _default_txn = str(int(round(_wd_vals.quantile(0.95) / 100) * 100)) if len(_wd_vals) > 10 else "10000"
             _monthly_spend = df.groupby(df["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum()
             _default_monthly = str(int(round(_monthly_spend.quantile(0.85) / 1000) * 1000)) if len(_monthly_spend) > 2 else "50000"
+            # Initialize session defaults only once
+            if "guard_txn_val" not in st.session_state:
+                st.session_state["guard_txn_val"] = _default_txn
+            if "guard_monthly_val" not in st.session_state:
+                st.session_state["guard_monthly_val"] = _default_monthly
             _gc1, _gc2, _gc3 = st.columns([1, 1, 1])
             with _gc1:
                 st.markdown('<div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace;letter-spacing:1px;margin-bottom:4px">MAX PER TRANSACTION (₹)</div>', unsafe_allow_html=True)
-                _guard_txn_str = st.text_input("txn_limit", value=_default_txn, key="guard_txn", label_visibility="collapsed", placeholder="e.g. 10000")
+                _guard_txn_str = st.text_input("txn_limit", value=st.session_state["guard_txn_val"], key="guard_txn_input", label_visibility="collapsed", placeholder="e.g. 10000")
             with _gc2:
                 st.markdown('<div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace;letter-spacing:1px;margin-bottom:4px">MONTHLY BUDGET LIMIT (₹)</div>', unsafe_allow_html=True)
-                _guard_monthly_str = st.text_input("monthly_limit", value=_default_monthly, key="guard_monthly", label_visibility="collapsed", placeholder="e.g. 50000")
+                _guard_monthly_str = st.text_input("monthly_limit", value=st.session_state["guard_monthly_val"], key="guard_monthly_input", label_visibility="collapsed", placeholder="e.g. 50000")
             with _gc3:
                 st.markdown('<div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace;letter-spacing:1px;margin-bottom:4px">WATCH CATEGORIES</div>', unsafe_allow_html=True)
                 _guard_cats = st.multiselect("cats", options=sorted(df["CATEGORY"].unique()), default=[], key="guard_cats", label_visibility="collapsed")
             st.markdown('</div>', unsafe_allow_html=True)
+            # ── Scan Button ──
+            _scan_col1, _scan_col2, _scan_col3 = st.columns([1, 1, 1])
+            with _scan_col2:
+                _scan_clicked = st.button("🔍  Scan Transactions", key="scan_btn", use_container_width=True, type="primary")
+            if _scan_clicked:
+                st.session_state["guard_txn_val"] = _guard_txn_str
+                st.session_state["guard_monthly_val"] = _guard_monthly_str
+                st.session_state["guardrails_applied"] = True
             # Parse text inputs safely
-            try: _guard_txn = int(_guard_txn_str.replace(",","").replace("₹","").strip())
+            _active_txn_str = st.session_state.get("guard_txn_val", _default_txn)
+            _active_monthly_str = st.session_state.get("guard_monthly_val", _default_monthly)
+            try: _guard_txn = int(str(_active_txn_str).replace(",","").replace("₹","").strip())
             except: _guard_txn = 10000
-            try: _guard_monthly = int(_guard_monthly_str.replace(",","").replace("₹","").strip())
+            try: _guard_monthly = int(str(_active_monthly_str).replace(",","").replace("₹","").strip())
             except: _guard_monthly = 50000
+            # Reset guardrail-level flags before re-applying (keep contextual flags)
+            _ctx_mask = df["ALERT_LEVEL"] == 3  # preserve hard alerts from contextual engine
+            df.loc[~_ctx_mask, "ALERT_LEVEL"] = 0
+            df.loc[~_ctx_mask, "ALERT_REASON"] = ""
             # Apply user guardrails on top of contextual engine
             for _gi, _grow in df.iterrows():
                 _reasons = []
