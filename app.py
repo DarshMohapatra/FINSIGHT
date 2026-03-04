@@ -135,19 +135,28 @@ def categorize(desc):
     # Digital payments
     elif "UPI" in d: return "UPI Payment"
     elif any(k in d for k in ["NEFT", "RTGS", "IMPS"]): return "Online Payment"
+    # POS / Card swipes (MUST be before Shopping to catch generic card txns)
+    elif any(k in d for k in ["POS ", "POS/", "POINT OF SALE", "CARD SWIPE", "ECOM",
+        "CONTACTLESS", "DEBIT CARD", "MPS/"]): return "Card Payment"
     # Cash
     elif any(k in d for k in ["CASHDEP", "CASH DEP", "CASH DEPOSIT"]): return "Cash Deposit"
     elif any(k in d for k in ["ATM", "CDM", "CASHWDL", "CASH WDL", "CASH WITHDRAWAL"]): return "ATM/Cash Withdrawal"
     # Cheque
     elif any(k in d for k in ["CHQ", "CHEQUE", "CHECK", "CLG"]): return "Cheque"
+    # Credit card bill payments
+    elif any(k in d for k in ["CREDIT CARD", "CC BILL", "CC PAYMENT", "CARD BILL",
+        "CRED ", "CRED/", "CARDPAY"]): return "Credit Card Bill"
     # Loans & EMI
     elif any(k in d for k in ["EMI", "LOAN", "MORTGAGE", "REPAYMENT"]): return "Loan/EMI"
     # Tax & Government
     elif any(k in d for k in ["TAX", "GST", "GOVT", "TDS", "INCOME TAX", "MCA", "EPFO", "PF"]): return "Tax/Government"
-    # Shopping & E-commerce
+    # Shopping & E-commerce (includes fashion brands)
     elif any(k in d for k in ["AMAZON", "FLIPKART", "MYNTRA", "AJIO", "MEESHO", "SNAPDEAL",
         "SHOPPERS", "BIGBASKET", "BLINKIT", "ZEPTO", "JIOMART", "DMART", "GROFERS",
-        "RELIANCE RETAIL", "TATA CLIQ", "NYKAA", "CROMA", "VIJAY SALES"]): return "Shopping"
+        "RELIANCE RETAIL", "TATA CLIQ", "NYKAA", "CROMA", "VIJAY SALES",
+        "WESTSIDE", "TRENT", "PANTALOONS", "LIFESTYLE", "SHOPPERS STOP",
+        "DECATHLON", "IKEA", "CHROMA", "RELIANCE DIGITAL", "LENSKART",
+        "FIRSTCRY", "BEWAKOOF", "URBANIC", "H&M", "ZARA"]): return "Shopping"
     # Food & Dining
     elif any(k in d for k in ["SWIGGY", "ZOMATO", "DOMINOS", "MCDONALD", "KFC", "PIZZA",
         "STARBUCKS", "BURGER", "RESTAURANT", "FOOD", "CAFE", "DINING", "DUNZO",
@@ -174,28 +183,24 @@ def categorize(desc):
     elif any(k in d for k in ["SCHOOL", "COLLEGE", "UNIVERSITY", "TUITION", "COURSE",
         "UDEMY", "COURSERA", "UNACADEMY", "BYJU", "EDUCATION", "EXAM FEE",
         "UPGRAD"]): return "Education"
-    # Rent & Housing
-    elif any(k in d for k in ["RENT", "HOUSE RENT", "PG RENT", "MAINTENANCE", "SOCIETY"]): return "Rent & Housing"
+    # Rent & Housing (word-boundary safe — avoids matching "trentwestside")
+    elif any(k in d for k in ["HOUSE RENT", "PG RENT", "MAINTENANCE", "SOCIETY"]) or \
+         ((" RENT" in d or d.startswith("RENT") or "/RENT" in d) and "TRENT" not in d): return "Rent & Housing"
     # Medical & Health
     elif any(k in d for k in ["HOSPITAL", "PHARMACY", "MEDICAL", "DOCTOR", "CLINIC",
         "APOLLO", "MEDPLUS", "1MG", "PHARMEASY", "NETMEDS", "DIAGNOSTIC",
         "PATHLAB", "DENTAL"]): return "Medical & Health"
     # Investments
     elif any(k in d for k in ["MUTUAL FUND", "SIP ", "ZERODHA", "GROWW", "KUVERA",
-        "DEMAT", "SHARE", "STOCK", "NSE ", "BSE ", "COIN ", "IPO",
-        "SMALLCASE", "PPF", "NPS", "FD ", "FIXED DEPOSIT", "RD "]): return "Investments"
+        "DEMAT", "NSE ", "BSE ", "COIN ", "IPO",
+        "SMALLCASE", "PPF", "NPS ", "FD ", "FIXED DEPOSIT", "RD "]): return "Investments"
     # Bank charges
     elif any(k in d for k in ["SERVICE CHARGE", "BANK CHARGE", "ANNUAL FEE", "LATE FEE",
         "PENALTY", "INTEREST CHARGED", "DEBIT INTEREST", "MIN BAL"]): return "Bank Charges"
-    # POS / Card swipes
-    elif any(k in d for k in ["POS ", "POS/", "POINT OF SALE", "CARD SWIPE", "ECOM",
-        "MERCHANT", "CONTACTLESS"]): return "Card Payment"
-    # Credit card bill payments
-    elif any(k in d for k in ["CREDIT CARD", "CC BILL", "CC PAYMENT", "CARD BILL",
-        "CRED ", "CRED/", "CARDPAY"]): return "Credit Card Bill"
     # Digital wallets & payment apps (non-UPI)
     elif any(k in d for k in ["PHONEPE", "PAYTM", "GPAY", "GOOGLE PAY", "MOBIKWIK",
-        "FREECHARGE", "WALLET", "LAZYPAY", "SIMPL", "SLICE"]): return "Digital Wallet"
+        "FREECHARGE", "WALLET", "LAZYPAY", "SIMPL", "SLICE",
+        "BHARATPE"]): return "Digital Wallet"
     # Payment gateways
     elif any(k in d for k in ["BILLDESK", "RAZORPAY", "PAYU", "CASHFREE", "CCAVENUE",
         "PAYGATE", "PAYMENT GATEWAY", "INSTAMOJO"]): return "Bill Payment"
@@ -586,6 +591,9 @@ def process_file(uploaded, pdf_password=""):
 
     # ── Anomaly Detection ─────────────────────────────────────────
     # ── Contextual Flagging Engine ──
+    # Categories that are naturally spiky — need higher thresholds
+    _HIGH_VAR_CATS = {"Travel & Transport", "UPI Payment", "Shopping",
+                      "Card Payment", "Online Payment", "Bill Payment"}
     _cat_type_map = {}
     _sp = df[df["WITHDRAWAL AMT"]>0].copy()
     _sp["_MP"] = _sp["DATE"].dt.to_period("M")
@@ -610,14 +618,20 @@ def process_file(uploaded, pdf_password=""):
         _cr=_sp[_sp["CATEGORY"]==_cat].copy()
         if _cr.empty: continue
         _ct=_pf["type"]; _mm=_pf["mm"]; _hmx=_pf["hmx"]; _rms=_pf["rm"]
+        # Higher thresholds for naturally variable categories
+        _is_hv = _cat in _HIGH_VAR_CATS
         if _ct=="A":
+            _t_hard = 2.5 if _is_hv else 1.5
+            _t_soft = 2.0 if _is_hv else 1.2
             for _i,_row in _cr.iterrows():
                 _rv=_rms.get(str(_row["_MP"]),_mm) or _mm
                 if _rv<=0: continue
                 _rt=_row["WITHDRAWAL AMT"]/_rv
-                if _rt>=1.5: _aa(_i,3,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected ₹{_rv:,.0f} — significant spike.")
-                elif _rt>=1.2: _aa(_i,2,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected ₹{_rv:,.0f} — possible fee increase.")
+                if _rt>=_t_hard: _aa(_i,3,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected ₹{_rv:,.0f} — significant spike.")
+                elif _rt>=_t_soft: _aa(_i,2,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected ₹{_rv:,.0f} — above normal.")
         elif _ct=="B":
+            _t_hard = 4.0 if _is_hv else 2.9
+            _t_soft = 3.0 if _is_hv else 1.9
             _cmo=_cr.groupby("_MP")["WITHDRAWAL AMT"].sum()
             for _mp,_mt in _cmo.items():
                 _rv=_rms.get(str(_mp),_mm) or _mm
@@ -626,15 +640,16 @@ def process_file(uploaded, pdf_password=""):
                 _sb=_cr[(_cr["_MP"]==_mp)&(_cr["WITHDRAWAL AMT"]>0)]
                 if _sb.empty: continue
                 _ai=_sb["WITHDRAWAL AMT"].idxmax()
-                if _rt>2.9: _aa(_ai,3,f"{_cat}: Monthly ₹{_mt:,.0f} is {_rt:.1f}x rolling avg ₹{_rv:,.0f} — extreme spike.")
-                elif _rt>1.9: _aa(_ai,2,f"{_cat}: Monthly ₹{_mt:,.0f} is {_rt:.1f}x rolling avg ₹{_rv:,.0f} — unusually high.")
+                if _rt>_t_hard: _aa(_ai,3,f"{_cat}: Monthly ₹{_mt:,.0f} is {_rt:.1f}x rolling avg ₹{_rv:,.0f} — extreme spike.")
+                elif _rt>_t_soft: _aa(_ai,2,f"{_cat}: Monthly ₹{_mt:,.0f} is {_rt:.1f}x rolling avg ₹{_rv:,.0f} — unusually high.")
         elif _ct=="C":
             _cs=_cr.sort_values("DATE")
             for _i,_row in _cs.iterrows():
                 _pr=_cs[(_cs["DATE"]<_row["DATE"])&(_cs["DATE"]>=_row["DATE"]-pd.Timedelta(days=60))]
                 _pc=len(_pr)
-                if _pc>=2: _aa(_i,3,f"{_cat}: {_pc+1} transactions in 60 days — unusually frequent.")
-                elif _pc==1: _aa(_i,2,f"{_cat}: 2nd transaction in {(_row['DATE']-_pr['DATE'].max()).days}d — typically rare.")
+                if not _is_hv:
+                    if _pc>=2: _aa(_i,3,f"{_cat}: {_pc+1} transactions in 60 days — unusually frequent.")
+                    elif _pc==1: _aa(_i,2,f"{_cat}: 2nd transaction in {(_row['DATE']-_pr['DATE'].max()).days}d — typically rare.")
                 if _hmx>0 and _row["WITHDRAWAL AMT"]>_hmx*1.5: _aa(_i,3,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is 1.5x+ historical max ₹{_hmx:,.0f}.")
     for _i,(_lv,_rs) in _am.items():
         df.at[_i,"ALERT_LEVEL"]=_lv; df.at[_i,"ALERT_REASON"]=_rs
