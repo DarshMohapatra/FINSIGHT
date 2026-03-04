@@ -33,18 +33,22 @@ try:
         if not _verify_pw(password,u["password_hash"]): return {"success":False,"error":"Incorrect password."}
         prefs=_sb.table("user_preferences").select("*").eq("user_id",u["id"]).execute()
         return {"success":True,"user_id":u["id"],"display_name":u["display_name"],"age":u["age"],"prefs":prefs.data[0] if prefs.data else {}}
+    def _jsonable(v):
+        if v is None or (isinstance(v,float) and np.isnan(v)): return None
+        if isinstance(v,(np.integer,)): return int(v)
+        if isinstance(v,(np.floating,)): return float(v)
+        if isinstance(v,(np.bool_,)): return bool(v)
+        if isinstance(v,(pd.Timestamp,)): return v.isoformat()
+        if isinstance(v,(pd.Period,)): return str(v)
+        if hasattr(v,"isoformat"): return v.isoformat()
+        if isinstance(v,(np.ndarray,)): return v.tolist()
+        if isinstance(v,(bytes,)): return v.decode()
+        return v
     def _save_month(uid,month,df_m):
         import json as _j
         try:
-            _clean = df_m.copy()
-            for _c in _clean.select_dtypes(include=["datetime64","datetimetz"]).columns:
-                _clean[_c] = _clean[_c].dt.strftime("%Y-%m-%d")
-            for _c in _clean.columns:
-                _clean[_c] = _clean[_c].where(_clean[_c].notna(), None)
-                if _clean[_c].dtype.kind in ("i","u","f"):
-                    _clean[_c] = _clean[_c].astype(object).where(_clean[_c].notna(), None)
-            _rows = _j.loads(_j.dumps([{k:(int(v) if isinstance(v,(np.integer,)) else float(v) if isinstance(v,(np.floating,)) else v) for k,v in row.items()} for row in _clean.to_dict(orient="records")]))
-            _sb.table("user_statements").upsert({"user_id":uid,"month_period":month,"row_count":len(df_m),"data_json":_rows},on_conflict="user_id,month_period").execute()
+            _rows = [{k:_jsonable(v) for k,v in row.items()} for row in df_m.to_dict(orient="records")]
+            _sb.table("user_statements").upsert({"user_id":uid,"month_period":str(month),"row_count":len(df_m),"data_json":_rows},on_conflict="user_id,month_period").execute()
             return {"ok":True}
         except Exception as _e:
             return {"ok":False,"error":str(_e)}
