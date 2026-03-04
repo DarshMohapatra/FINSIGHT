@@ -590,10 +590,60 @@ def process_file(uploaded, pdf_password=""):
     feats = df[["WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"]].copy()
     sc = StandardScaler()
     fs = sc.fit_transform(feats)
-    m  = IsolationForest(n_estimators=100, contamination=0.02, random_state=42)
-    m.fit(fs)
-    df["IS_ANOMALY"] = m.predict(fs)
-    df["IS_ANOMALY"] = df["IS_ANOMALY"].map({1: 0, -1: 1})
+    # ── Contextual Flagging Engine (replaces Isolation Forest) ──
+    _cat_type_map = {}
+    _sp = df[df["WITHDRAWAL AMT"]>0].copy()
+    _sp["_MP"] = _sp["DATE"].dt.to_period("M")
+    _tm = df["DATE"].dt.to_period("M").nunique()
+    for _cat, _grp in _sp.groupby("CATEGORY"):
+        _ms = _grp.groupby("_MP")["WITHDRAWAL AMT"].sum()
+        _ar = _ms.shape[0] / _tm
+        _cv = (_ms.std()/_ms.mean()) if _ms.std()>0 and _ms.mean()>0 else 0
+        _rm = _ms.rolling(3,min_periods=1).mean()
+        _cat_type_map[_cat] = {
+            "type": "A" if _ar>=0.6 and _cv<0.25 else ("B" if _ar>=0.4 else "C"),
+            "mm"  : float(_ms.mean()),
+            "hmx" : float(_grp["WITHDRAWAL AMT"].max()),
+            "rm"  : {str(k):float(v) for k,v in _rm.items()}
+        }
+    df["ALERT_LEVEL"]  = 0
+    df["ALERT_REASON"] = ""
+    _am = {}
+    def _aa(_i,_lv,_rs):
+        if _i not in _am or _lv>_am[_i][0]: _am[_i]=(_lv,_rs)
+    for _cat,_pf in _cat_type_map.items():
+        _cr=_sp[_sp["CATEGORY"]==_cat].copy()
+        if _cr.empty: continue
+        _ct=_pf["type"]; _mm=_pf["mm"]; _hmx=_pf["hmx"]; _rms=_pf["rm"]
+        if _ct=="A":
+            for _i,_row in _cr.iterrows():
+                _rv=_rms.get(str(_row["_MP"]),_mm) or _mm
+                if _rv<=0: continue
+                _rt=_row["WITHDRAWAL AMT"]/_rv
+                if _rt>=1.5: _aa(_i,3,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected ₹{_rv:,.0f} — significant spike.")
+                elif _rt>=1.2: _aa(_i,2,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected ₹{_rv:,.0f} — possible fee increase.")
+        elif _ct=="B":
+            _cmo=_cr.groupby("_MP")["WITHDRAWAL AMT"].sum()
+            for _mp,_mt in _cmo.items():
+                _rv=_rms.get(str(_mp),_mm) or _mm
+                if _rv<=0: continue
+                _rt=_mt/_rv
+                _sb=_cr[(_cr["_MP"]==_mp)&(_cr["WITHDRAWAL AMT"]>0)]
+                if _sb.empty: continue
+                _ai=_sb["WITHDRAWAL AMT"].idxmax()
+                if _rt>2.9: _aa(_ai,3,f"{_cat}: Monthly ₹{_mt:,.0f} is {_rt:.1f}x rolling avg ₹{_rv:,.0f} — extreme spike.")
+                elif _rt>1.9: _aa(_ai,2,f"{_cat}: Monthly ₹{_mt:,.0f} is {_rt:.1f}x rolling avg ₹{_rv:,.0f} — unusually high.")
+        elif _ct=="C":
+            _cs=_cr.sort_values("DATE")
+            for _i,_row in _cs.iterrows():
+                _pr=_cs[(_cs["DATE"]<_row["DATE"])&(_cs["DATE"]>=_row["DATE"]-pd.Timedelta(days=60))]
+                _pc=len(_pr)
+                if _pc>=2: _aa(_i,3,f"{_cat}: {_pc+1} transactions in 60 days — unusually frequent.")
+                elif _pc==1: _aa(_i,2,f"{_cat}: 2nd transaction in {(_row['DATE']-_pr['DATE'].max()).days}d — typically rare.")
+                if _hmx>0 and _row["WITHDRAWAL AMT"]>_hmx*1.5: _aa(_i,3,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is 1.5x+ historical max ₹{_hmx:,.0f}.")
+    for _i,(_lv,_rs) in _am.items():
+        df.at[_i,"ALERT_LEVEL"]=_lv; df.at[_i,"ALERT_REASON"]=_rs
+    df["IS_ANOMALY"] = (df["ALERT_LEVEL"]>0).astype(int)
     df["MONTH"] = df["DATE"].dt.to_period("M")
     return df
 
@@ -627,7 +677,7 @@ def build_context(df):
     total_wd    = round(df["WITHDRAWAL AMT"].sum() / scale, 2)
     total_dep   = round(df["DEPOSIT AMT"].sum() / scale, 2)
     avg_monthly = round(df.groupby("MONTH")["WITHDRAWAL AMT"].sum().mean() / scale, 2)
-    anomalies   = int(df["IS_ANOMALY"].sum())
+    anomalies   = int(df["ALERT_LEVEL"].gt(0).sum())
     top_cat     = df["CATEGORY"].value_counts().index[0]
     monthly_t   = df.groupby("MONTH")["WITHDRAWAL AMT"].sum()
     max_month   = str(monthly_t.idxmax())
@@ -791,7 +841,7 @@ def compute_yir_data(df):
         else:
             largest_amt, largest_desc = 0, "—"
         # Anomaly count
-        anomaly_count = int(gdf["IS_ANOMALY"].sum()) if "IS_ANOMALY" in gdf.columns else 0
+        anomaly_count = int(gdf["ALERT_LEVEL"].gt(0).sum()) if "ALERT_LEVEL" in gdf.columns else 0
         # Monthly spend dict
         monthly_spend = {}
         for m in range(1, 13):
@@ -884,14 +934,14 @@ else:
             for col, (val, lbl) in zip([c1, c2, c3, c4], [
                 (str(len(df)), "TRANSACTIONS"),
                 (cfmt(df["WITHDRAWAL AMT"].sum(), None), "TOTAL WITHDRAWN"),
-                (str(int(df["IS_ANOMALY"].sum())), "ANOMALIES FLAGGED"),
+                (str(int(df["ALERT_LEVEL"].gt(0).sum())), "ANOMALIES FLAGGED"),
                 (str(round((df["CATEGORY"] != "Other").sum()/len(df)*100, 1)) + "%", "AUTO CATEGORIZED"),
             ]):
                 with col:
                     st.markdown("<div class='metric-card'><div class='metric-val'>" + val + "</div><div class='metric-lbl'>" + lbl + "</div></div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
-            disp = df[["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "DEPOSIT AMT", "CATEGORY", "IS_ANOMALY"]].head(20).copy()
-            disp["IS_ANOMALY"] = disp["IS_ANOMALY"].map({1: "🚨 Yes", 0: "✅ No"})
+            disp = df[["DATE", "TRANSACTION DETAILS", "WITHDRAWAL AMT", "DEPOSIT AMT", "CATEGORY", "ALERT_LEVEL", "ALERT_REASON"]].head(20).copy()
+            disp["ALERT_LEVEL"] = disp["ALERT_LEVEL"].map({0:"✅ Clean",1:"🔵 Info",2:"🟡 Soft",3:"🔴 Hard"})
             disp["WITHDRAWAL AMT"] = disp["WITHDRAWAL AMT"].apply(lambda x: cfmt(x, None))
             disp["DEPOSIT AMT"]    = disp["DEPOSIT AMT"].apply(lambda x: cfmt(x, None))
             st.dataframe(disp, use_container_width=True, hide_index=True)
@@ -967,7 +1017,7 @@ else:
             axes[0,1].set_title("Spending by Category", color="white", fontsize=12, pad=12)
             axes[0,1].tick_params(colors="#aaa", labelsize=9)
             axes[0,1].xaxis.set_major_formatter(mticker.FuncFormatter(cfmt))
-            am = df[df["IS_ANOMALY"]==1].groupby("MONTH")["IS_ANOMALY"].count()
+            am = df[df["ALERT_LEVEL"]>0].groupby("MONTH")["IS_ANOMALY"].count()
             x = list(range(len(am)))
             if x:
                 axes[1,0].bar(x, am.values, color="#ff4d6d", alpha=0.85, edgecolor="none")
