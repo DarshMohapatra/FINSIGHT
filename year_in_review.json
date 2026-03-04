@@ -1,0 +1,412 @@
+{
+  "2019": {
+    "year": 2019,
+    "total_txns": 5524,
+    "total_spent": 1096299964.13,
+    "total_received": 1085200693.73,
+    "net_saved": -11099270.4,
+    "savings_rate": -1.0,
+    "top_merchant_by_amount": {
+      "name": "FDRL/INTERNAL FUND TRANSFE",
+      "amount": 610969837.0
+    },
+    "top_merchant_by_frequency": {
+      "name": "FDRL/INTERNAL FUND TRANSFE",
+      "count": 829
+    },
+    "most_expensive_day": {
+      "date": "2019-02-11",
+      "amount": 46167115.27
+    },
+    "biggest_month": {
+      "name": "January",
+      "amount": 573110951.86
+    },
+    "quietest_month": {
+      "name": "March",
+      "amount": 73614879.4
+    },
+    "top_category": {
+      "name": "Transfer In",
+      "amount": 610969837.0,
+      "pct": 55.7
+    },
+    "category_breakdown": [
+      {
+        "name": "Transfer In",
+        "amount": 610969837.0,
+        "pct": 55.7
+      },
+      {
+        "name": "Online Payment",
+        "amount": 245901380.84,
+        "pct": 22.4
+      },
+      {
+        "name": "Other",
+        "amount": 180758746.05,
+        "pct": 16.5
+      },
+      {
+        "name": "Transfer Out",
+        "amount": 20057778.84,
+        "pct": 1.8
+      },
+      {
+        "name": "Business Transfer",
+        "amount": 14855237.6,
+        "pct": 1.4
+      }
+    ],
+    "largest_txn": {
+      "amount": 10000000.0,
+      "desc": "FDRL/INTERNAL FUND TRANSFE",
+      "date": "2019-02-11"
+    },
+    "anomaly_count": 0,
+    "avg_daily_spend": 21496077.73,
+    "active_spending_days": 51,
+    "monthly_spend": {
+      "January": 573110951.86,
+      "February": 449574132.87,
+      "March": 73614879.4,
+      "April": 0.0,
+      "May": 0.0,
+      "June": 0.0,
+      "July": 0.0,
+      "August": 0.0,
+      "September": 0.0,
+      "October": 0.0,
+      "November": 0.0,
+      "December": 0.0
+    }
+  },
+  "2018": {
+    "year": 2018,
+    "total_txns": 35534,
+    "total_spent": 29178140043.77,
+    "total_received": 28599137733.96,
+    "net_saved": -579002309.81,
+    "savings_rate": -2.0,
+    "top_merchant_by_amount": {
+      "name": "TRF TO  Indiaforensic SERVICES I",
+      "amount": 7014394430.0
+    },
+    "top_merchant_by_frequency": {
+      "name": "FDRL/NATIONAL ELECTRONIC F",
+      "count": 4265
+    },
+    "most_expensive_day": {
+      "date": "2018-06-26",
+      "amount": 534061882.99
+    },
+    "biggest_month": {
+      "name": "February",
+      "amount": 3471023774.28
+    },
+    "quietest_month": {
+      "name": "December",
+      "amount": 1208159081.99
+    },
+    "top_category": {
+      "name": "Transfer Out",
+      "amount": 7798066231.76,
+      "pct": 26.7
+    },
+    "category_breakdown": [
+      {
+        "name": "Transfer Out",
+        "amount": 7798066231.76,
+        "pct": 26.7
+      },
+      {
+        "name": "Online Payment",
+        "amount": 7236547818.46,
+        "pct": 24.8
+      },
+      {
+        "name": "Other",
+        "amount": 6578318962.09,
+        "pct": 22.5
+      },
+      {
+        "name": "Transfer In",
+        "amount": 3935144549.05,
+        "pct": 13.5
+      },
+      {
+        "name": "Business Transfer",
+        "amount": 3285301203.75,
+        "pct": 11.3
+      }
+    ],
+    "largest_txn": {
+      "amount": 459447546.36,
+      "desc": "909000055389 - Payoff Sou",
+      "date": "2018-06-26"
+    },
+    "anomaly_count": 307,
+    "avg_daily_spend": 102739929.73,
+    "active_spending_days": 284,
+    "monthly_spend": {
+      "January": 3305051645.12,
+      "February": 3471023774.28,
+      "March": 2679578359.81,
+      "April": 2577939532.66,
+      "May": 2852910147.29,
+      "June": 2842196453.92,
+      "July": 2465076324.26,
+      "August": 2046133554.73,
+      "September": 1995643960.05,
+      "October": 2179257214.82,
+      "November": 1555169994.84,
+      "December": 1208159081.99
+    }
+  },
+  "2017": {
+    "year": 2017,
+    "total_txns": 29113,
+    "total_spent": 56857667260.77,
+    "total_received": 57197419895.75,
+    "net_saved": 339752634.98,
+    "savings_rate": 0.6,
+    "top_merchant_by_amount": {
+      "name": "FDRL/INTERNAL FUND TRANSFE",
+      "amount": 14887836752.0
+    },
+    "top_merchant_by_frequency": {
+      "name": "FDRL/INTERNAL FUND TRANSFE",
+      "count": 2121
+    },
+    "most_expensive_day": {
+      "date": "2017-05-26",
+      "amount": 629808083.12
+    },
+    "biggest_month": {
+      "name": "January",
+      "amount": 6204672938.85
+    },
+    "quietest_month": {
+      "name": "July",
+      "amount": 3593253576.14
+    },
+    "top_category": {
+      "name": "Online Payment",
+      "amount": 24600760213.11,
+      "pct": 43.3
+    },
+    "category_breakdown": [
+      {
+        "name": "Online Payment",
+        "amount": 24600760213.11,
+        "pct": 43.3
+      },
+      {
+        "name": "Transfer In",
+        "amount": 14891536752.0,
+        "pct": 26.2
+      },
+      {
+        "name": "Business Transfer",
+        "amount": 6347475711.2,
+        "pct": 11.2
+      },
+      {
+        "name": "Other",
+        "amount": 5515099268.6,
+        "pct": 9.7
+      },
+      {
+        "name": "Transfer Out",
+        "amount": 5018549966.82,
+        "pct": 8.8
+      }
+    ],
+    "largest_txn": {
+      "amount": 448207223.14,
+      "desc": "Loan Recovery For90900003",
+      "date": "2017-05-26"
+    },
+    "anomaly_count": 706,
+    "avg_daily_spend": 198110338.89,
+    "active_spending_days": 287,
+    "monthly_spend": {
+      "January": 6204672938.85,
+      "February": 5361240332.58,
+      "March": 5789834691.6,
+      "April": 4211487984.19,
+      "May": 4644975090.01,
+      "June": 3939019797.0,
+      "July": 3593253576.14,
+      "August": 4071317786.16,
+      "September": 4785987752.47,
+      "October": 5130759191.18,
+      "November": 4993841746.38,
+      "December": 4131276374.21
+    }
+  },
+  "2016": {
+    "year": 2016,
+    "total_txns": 29132,
+    "total_spent": 100123781279.92,
+    "total_received": 84753008737.37,
+    "net_saved": -15370772542.55,
+    "savings_rate": -18.1,
+    "top_merchant_by_amount": {
+      "name": "INTERNAL FUND TRANSFER IN",
+      "amount": 19373000000.0
+    },
+    "top_merchant_by_frequency": {
+      "name": "INTERNAL FUND TRANSFER IN",
+      "count": 1637
+    },
+    "most_expensive_day": {
+      "date": "2016-01-11",
+      "amount": 813489719.51
+    },
+    "biggest_month": {
+      "name": "April",
+      "amount": 10029253338.04
+    },
+    "quietest_month": {
+      "name": "December",
+      "amount": 5928980118.49
+    },
+    "top_category": {
+      "name": "Online Payment",
+      "amount": 52999504377.86,
+      "pct": 52.9
+    },
+    "category_breakdown": [
+      {
+        "name": "Online Payment",
+        "amount": 52999504377.86,
+        "pct": 52.9
+      },
+      {
+        "name": "Transfer Out",
+        "amount": 22990355545.92,
+        "pct": 23.0
+      },
+      {
+        "name": "Transfer In",
+        "amount": 21048000000.0,
+        "pct": 21.0
+      },
+      {
+        "name": "Other",
+        "amount": 1577092957.52,
+        "pct": 1.6
+      },
+      {
+        "name": "Business Transfer",
+        "amount": 1507155583.69,
+        "pct": 1.5
+      }
+    ],
+    "largest_txn": {
+      "amount": 400000000.0,
+      "desc": "YOURSELF FOR M Joshi",
+      "date": "2016-03-08"
+    },
+    "anomaly_count": 913,
+    "avg_daily_spend": 347652018.33,
+    "active_spending_days": 288,
+    "monthly_spend": {
+      "January": 8291576853.64,
+      "February": 7362125419.47,
+      "March": 9220220100.79,
+      "April": 10029253338.04,
+      "May": 8848153753.0,
+      "June": 9669233982.66,
+      "July": 8979444775.44,
+      "August": 9319171157.84,
+      "September": 7556263556.03,
+      "October": 8132238502.55,
+      "November": 6787119721.97,
+      "December": 5928980118.49
+    }
+  },
+  "2015": {
+    "year": 2015,
+    "total_txns": 14399,
+    "total_spent": 53135743736.17,
+    "total_received": 36358448262.69,
+    "net_saved": -16777295473.48,
+    "savings_rate": -46.1,
+    "top_merchant_by_amount": {
+      "name": "INTERNAL FUND TRANSFER IN",
+      "amount": 18370400000.0
+    },
+    "top_merchant_by_frequency": {
+      "name": "INTERNAL FUND TRANSFER IN",
+      "count": 1625
+    },
+    "most_expensive_day": {
+      "date": "2015-09-14",
+      "amount": 1008202512.65
+    },
+    "biggest_month": {
+      "name": "December",
+      "amount": 9784755176.62
+    },
+    "quietest_month": {
+      "name": "March",
+      "amount": 112995472.0
+    },
+    "top_category": {
+      "name": "Online Payment",
+      "amount": 25174618089.58,
+      "pct": 47.4
+    },
+    "category_breakdown": [
+      {
+        "name": "Online Payment",
+        "amount": 25174618089.58,
+        "pct": 47.4
+      },
+      {
+        "name": "Transfer In",
+        "amount": 18644400000.0,
+        "pct": 35.1
+      },
+      {
+        "name": "Transfer Out",
+        "amount": 6658515425.0,
+        "pct": 12.5
+      },
+      {
+        "name": "Business Transfer",
+        "amount": 1461357401.27,
+        "pct": 2.8
+      },
+      {
+        "name": "Other",
+        "amount": 1196449750.56,
+        "pct": 2.3
+      }
+    ],
+    "largest_txn": {
+      "amount": 267140318.41,
+      "desc": "TAKEOVR FUNDS OF OD FACIL",
+      "date": "2015-06-20"
+    },
+    "anomaly_count": 349,
+    "avg_daily_spend": 182597057.51,
+    "active_spending_days": 291,
+    "monthly_spend": {
+      "January": 113819320.36,
+      "February": 125428742.0,
+      "March": 112995472.0,
+      "April": 116198736.0,
+      "May": 160613236.0,
+      "June": 864309669.13,
+      "July": 4647694842.66,
+      "August": 9060110375.13,
+      "September": 9739721068.59,
+      "October": 9496546193.29,
+      "November": 8913550904.39,
+      "December": 9784755176.62
+    }
+  }
+}
