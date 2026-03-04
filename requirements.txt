@@ -6,3 +6,5 @@ groq
 plotly
 pdfplumber
 openpyxl
+supabase
+bcrypt

@@ -12,7 +12,7 @@ from groq import Groq
 try:
     from supabase import create_client as _sb_create
     import bcrypt as _bcrypt
-    _sb = _sb_create("https://rvgmqmfmbknxxdyqpcgz.supabase.co","sb_publishable_o3mTNEv-ejXYaCyEjI8slQ_c9zxoahn")
+    _sb = _sb_create("https://rvgmqmfmbknxxdyqpcgz.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2Z21xbWZtYmtueHhkeXFwY2d6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzE0NTUsImV4cCI6MjA4ODIwNzQ1NX0.8J0rgNuwM0WGDduHQiuDG6PxcrrPP4h62Uh2U1Hp3nA")
     def _hash_pw(p): return _bcrypt.hashpw(p.encode(),_bcrypt.gensalt()).decode()
     def _verify_pw(p,h): return _bcrypt.checkpw(p.encode(),h.encode())
     def _signup(email,password,name,age):
