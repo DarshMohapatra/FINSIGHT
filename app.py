@@ -1442,63 +1442,78 @@ else:
                     try:
                         # Build monthly spending from user's actual data
                         df_fc = df[df["IS_ANOMALY"] == 0] if "IS_ANOMALY" in df.columns else df
-                        ms = df_fc.groupby(df_fc["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
+                        # Only include months with actual withdrawal data
+                        df_fc_wd = df_fc[df_fc["WITHDRAWAL AMT"] > 0]
+                        if len(df_fc_wd) == 0:
+                            df_fc_wd = df_fc  # fallback to all data if no withdrawals
+                        ms = df_fc_wd.groupby(df_fc_wd["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
                         ms.columns = ["ds", "y"]
                         ms["ds"] = ms["ds"].dt.to_timestamp()
                         ms = ms.sort_values("ds").reset_index(drop=True)
 
                         n = len(ms)
-                        values = ms["y"].values
-                        last_date = ms["ds"].max()
-
-                        # Linear trend line through all months
-                        x = np.arange(n, dtype=float)
-                        if n >= 2:
-                            slope, intercept = np.polyfit(x, values, 1)
+                        if n == 0 or ms["y"].sum() == 0:
+                            st.info("Not enough spending data to generate a forecast. Upload a statement with withdrawal transactions.")
+                            st.session_state.forecast_cache = None
+                            st.session_state.forecast_df_id = _df_id
                         else:
-                            slope, intercept = 0.0, values[0]
+                            values = ms["y"].values.astype(float)
+                            last_date = ms["ds"].max()
 
-                        # Seasonal ratio per calendar month (Jan=1..Dec=12)
-                        # How much each calendar month deviates from overall avg
-                        overall_avg = values.mean()
-                        ms["cal_month"] = ms["ds"].dt.month
-                        cal_avg = ms.groupby("cal_month")["y"].mean()
-                        seasonal = {}
-                        for m_num in range(1, 13):
-                            if m_num in cal_avg.index and overall_avg > 0:
-                                seasonal[m_num] = cal_avg[m_num] / overall_avg
+                            # Linear trend line through all months
+                            x = np.arange(n, dtype=float)
+                            if n >= 2:
+                                try:
+                                    slope, intercept = np.polyfit(x, values, 1)
+                                except (np.linalg.LinAlgError, ValueError):
+                                    slope, intercept = 0.0, float(values.mean())
                             else:
-                                seasonal[m_num] = 1.0
+                                slope, intercept = 0.0, float(values[0])
 
-                        # Project next 6 months
-                        future_dates = pd.date_range(last_date + pd.DateOffset(months=1), periods=6, freq="MS")
-                        predicted = []
-                        for i, fdate in enumerate(future_dates):
-                            # Trend: extrapolate the trend line
-                            trend_val = intercept + slope * (n + i)
-                            # Seasonal: adjust by calendar month ratio
-                            s_ratio = seasonal[fdate.month]
-                            pred = max(trend_val * s_ratio, 0)
-                            predicted.append(pred)
+                            # Seasonal ratio per calendar month (Jan=1..Dec=12)
+                            overall_avg = float(values.mean())
+                            ms["cal_month"] = ms["ds"].dt.month
+                            cal_avg = ms.groupby("cal_month")["y"].mean()
+                            seasonal = {}
+                            for m_num in range(1, 13):
+                                if m_num in cal_avg.index and overall_avg > 0:
+                                    seasonal[m_num] = float(cal_avg[m_num]) / overall_avg
+                                else:
+                                    seasonal[m_num] = 1.0
 
-                        # Confidence band: +/- std dev of residuals, widening over time
-                        if n >= 2:
-                            trend_fitted = intercept + slope * x
-                            residuals = values - trend_fitted
-                            std_y = residuals.std()
-                        else:
-                            std_y = overall_avg * 0.1
-                        lower = [max(p - std_y * (0.8 + 0.2 * i), 0) for i, p in enumerate(predicted)]
-                        upper = [p + std_y * (0.8 + 0.2 * i) for i, p in enumerate(predicted)]
+                            # Project next 6 months
+                            future_dates = pd.date_range(last_date + pd.DateOffset(months=1), periods=6, freq="MS")
+                            predicted = []
+                            for i, fdate in enumerate(future_dates):
+                                trend_val = intercept + slope * (n + i)
+                                s_ratio = seasonal.get(fdate.month, 1.0)
+                                pred = max(float(trend_val * s_ratio), 0)
+                                predicted.append(pred)
 
-                        fc = pd.DataFrame({
-                            "ds": future_dates,
-                            "yhat": predicted,
-                            "yhat_lower": lower,
-                            "yhat_upper": upper,
-                        })
-                        st.session_state.forecast_cache = {"ms": ms, "fc": fc}
-                        st.session_state.forecast_df_id = _df_id
+                            # Confidence band: +/- std dev of residuals, widening over time
+                            if n >= 3:
+                                trend_fitted = intercept + slope * x
+                                residuals = values - trend_fitted
+                                std_y = float(residuals.std())
+                            elif n == 2:
+                                std_y = float(abs(values[1] - values[0]) * 0.3)
+                            else:
+                                std_y = overall_avg * 0.15
+                            # Guard against zero std
+                            if std_y < 1:
+                                std_y = overall_avg * 0.1
+
+                            lower = [max(p - std_y * (0.8 + 0.2 * i), 0) for i, p in enumerate(predicted)]
+                            upper = [p + std_y * (0.8 + 0.2 * i) for i, p in enumerate(predicted)]
+
+                            fc = pd.DataFrame({
+                                "ds": future_dates,
+                                "yhat": predicted,
+                                "yhat_lower": lower,
+                                "yhat_upper": upper,
+                            })
+                            st.session_state.forecast_cache = {"ms": ms, "fc": fc}
+                            st.session_state.forecast_df_id = _df_id
                     except Exception as e:
                         st.error("Forecast error: " + str(e))
                         st.session_state.forecast_cache = None
