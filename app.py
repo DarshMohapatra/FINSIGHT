@@ -199,12 +199,16 @@ def detect_currency(df):
 def sc_best(amount, category, wallet):
     cat = SC_CMAP.get(category, "Other")
     bi, br, bc = "NONE", 0.0, 0.0
+    wi, wr, wc = "NONE", 999.0, float("inf")
     for cid in wallet:
         rate = SC_RWD.get(cid, {}).get(cat, SC_RWD.get(cid, {}).get("Other", 0))
         cash = round(amount * rate / 100, 2)
         if cash > bc: bi, br, bc = cid, rate, cash
+        if cash < wc: wi, wr, wc = cid, rate, cash
     return {"name": SC_NAME.get(bi, bi), "rate": br,
-            "cash": bc, "base": round(amount/100, 2)}
+            "cash": bc, "base": round(amount/100, 2),
+            "worst_name": SC_NAME.get(wi, wi), "worst_rate": wr,
+            "worst_cash": wc if wc != float("inf") else 0.0}
 
 def sc_analyse(df, wallet):
     sp = df[(df["WITHDRAWAL AMT"]>0) & df["CATEGORY"].notna()
@@ -220,7 +224,11 @@ def sc_analyse(df, wallet):
                      "BEST_RATE": res["rate"],
                      "BEST_CASHBACK": res["cash"],
                      "BASELINE": res["base"],
-                     "EXTRA": round(res["cash"]-res["base"], 2)})
+                     "EXTRA": round(res["cash"]-res["base"], 2),
+                     "WORST_CARD": res["worst_name"],
+                     "WORST_RATE": res["worst_rate"],
+                     "WORST_CASHBACK": res["worst_cash"],
+                     "MISSED": round(res["cash"]-res["worst_cash"], 2)})
     return pd.DataFrame(rows)
 
 def sc_summary(rdf):
@@ -1658,7 +1666,8 @@ else:
         _sc_cur = st.session_state.get("currency", "IN")
         _sc_cc = CURRENCY_CONFIG.get(_sc_cur, CURRENCY_CONFIG["IN"])
         _sc_sym = _sc_cc["symbol"]
-        st.markdown(f'<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 01 — SMARTCASH</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💳 Card Reward Maximiser</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Find the best card in your wallet for every {_sc_cc["code"]} you spend.</div></div>', unsafe_allow_html=True)
+        _cur_word = {"IN":"rupee","US":"dollar","UK":"pound","CA":"dollar","AU":"dollar"}.get(_sc_cur,"unit")
+        st.markdown(f'<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 01 — SMARTCASH</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💳 Card Reward Maximiser</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Find the best card in your wallet for every {_cur_word} you spend.</div></div>', unsafe_allow_html=True)
         if st.session_state.get("user_df") is None:
             st.info("Upload your bank statement in the UPLOAD tab first.")
         elif not SC_CARD_MASTER:
@@ -1774,6 +1783,83 @@ else:
                 top20["BEST_CASHBACK"] = top20["BEST_CASHBACK"].apply(lambda x: f"{_sc_sym}{x:,.0f}")
                 top20["BEST_RATE"]     = top20["BEST_RATE"].apply(lambda x: f"{x:.1f}%")
                 st.dataframe(top20, use_container_width=True, hide_index=True)
+
+                # ── Milestone Celebration ──────────────────────────────
+                _months_in_data = rdf["DATE"].dt.to_period("M").nunique() if len(rdf) > 0 else 1
+                _annual_cb = tot_cb / max(_months_in_data, 1) * 12
+                _celebrations = []
+                if tot_cb >= 1000 or (tot_cb >= 100 and _sc_cur != "IN"):
+                    _celebrations.append(f"You've optimised {_sc_sym}{tot_cb:,.0f} in cashback — that's {_sc_sym}{_annual_cb:,.0f} projected annually!")
+                if eff_r >= 3.0:
+                    _celebrations.append(f"Your effective reward rate is {eff_r:.1f}% — you're in the top tier of cardholders!")
+                elif eff_r >= 2.0:
+                    _celebrations.append(f"A solid {eff_r:.1f}% effective rate — great card discipline!")
+                if tot_ex > 0:
+                    _celebrations.append(f"By using the right cards you earn {_sc_sym}{tot_ex:,.0f} more than a basic 1% card would give!")
+                # Check if any categories are perfectly optimised (best card used consistently)
+                _perfect_cats = [r["CATEGORY"] for _, r in scat.iterrows() if r["avg_rate"] >= 4.0]
+                if _perfect_cats:
+                    _celebrations.append(f"Excellent rewards on {', '.join(_perfect_cats[:3])} — you're using the right card{'s' if len(_perfect_cats)>1 else ''} there!")
+                if _celebrations:
+                    _cel_html = "".join([f'<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px"><span style="font-size:18px">🏆</span><span style="font-size:13px;color:#e8eaf0;line-height:1.5">{c}</span></div>' for c in _celebrations])
+                    st.markdown(f'<div style="margin:24px 0 20px;padding:20px 24px;background:linear-gradient(145deg,rgba(0,245,160,0.08),rgba(0,212,255,0.04));border:1px solid rgba(0,245,160,0.2);border-radius:14px"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px;margin-bottom:14px">MILESTONE CELEBRATIONS</div>{_cel_html}</div>', unsafe_allow_html=True)
+
+                # ── Missed Cashback Alerts ──────────────────────────────
+                if len(wallet_sc) > 1 and "MISSED" in rdf.columns:
+                    _missed_by_cat = rdf.groupby("CATEGORY").agg(
+                        total_missed=("MISSED","sum"),
+                        best_card=("BEST_CARD", lambda x: x.mode()[0]),
+                        worst_card=("WORST_CARD", lambda x: x.mode()[0]),
+                        spend=("AMOUNT","sum"),
+                        txns=("AMOUNT","count")
+                    ).sort_values("total_missed", ascending=False).reset_index()
+                    _missed_by_cat = _missed_by_cat[(_missed_by_cat["total_missed"] > 0) & (_missed_by_cat["best_card"] != _missed_by_cat["worst_card"])]
+                    if len(_missed_by_cat) > 0:
+                        st.markdown('<div style="margin:24px 0 12px;font-family:DM Mono,monospace;font-size:10px;color:#ff3c64;letter-spacing:2px">MISSED CASHBACK ALERTS</div>', unsafe_allow_html=True)
+                        st.markdown('<div style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:14px">If you use the wrong card for these categories, here\'s what you\'d leave on the table:</div>', unsafe_allow_html=True)
+                        for _, _mr in _missed_by_cat.head(5).iterrows():
+                            _missed_amt = _mr["total_missed"]
+                            _annual_missed = _missed_amt / max(_months_in_data, 1) * 12
+                            st.markdown(f'<div style="margin-bottom:10px;padding:16px;background:rgba(255,60,100,0.06);border:1px solid rgba(255,60,100,0.15);border-radius:12px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:14px;font-weight:700;color:#e8eaf0">{_mr["CATEGORY"]}</span><span style="font-size:14px;font-weight:800;color:#ff3c64">-{_sc_sym}{_missed_amt:,.0f}</span></div><div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6">Using <span style="color:#ff3c64;font-weight:600">{_mr["worst_card"]}</span> instead of <span style="color:#00f5a0;font-weight:600">{_mr["best_card"]}</span> costs you <b>{_sc_sym}{_annual_missed:,.0f}/year</b> across {_mr["txns"]:,} transactions.</div></div>', unsafe_allow_html=True)
+
+                # ── AI Card Matchmaker ──────────────────────────────
+                st.markdown('<div style="margin:30px 0 12px;font-family:DM Mono,monospace;font-size:10px;color:#00d4ff;letter-spacing:2px">AI CARD MATCHMAKER</div>', unsafe_allow_html=True)
+                st.markdown('<div style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:14px">Cards you don\'t own yet that could boost your rewards based on your spending:</div>', unsafe_allow_html=True)
+                # Find cards NOT in wallet, same country
+                _wallet_set = set(wallet_sc)
+                _other_cards = [c for c in _sc_cards_filtered if c["card_id"] not in _wallet_set]
+                if _other_cards:
+                    # Score each non-wallet card against user's spend
+                    _cat_spends = rdf.groupby("CATEGORY")["AMOUNT"].sum().to_dict()
+                    _suggestions = []
+                    for _oc in _other_cards:
+                        _oc_rates = SC_RWD.get(_oc["card_id"], {})
+                        _oc_cb = 0.0
+                        _oc_best_cats = []
+                        for _cat, _sp_amt in _cat_spends.items():
+                            _mapped = SC_CMAP.get(_cat, "Other")
+                            _r = _oc_rates.get(_mapped, _oc_rates.get("Other", 0))
+                            _oc_cb += _sp_amt * _r / 100
+                            if _r >= 3.0:
+                                _oc_best_cats.append((_mapped, _r))
+                        _oc_annual = _oc_cb / max(_months_in_data, 1) * 12
+                        _net_annual = _oc_annual - _oc.get("annual_fee", 0)
+                        _suggestions.append({
+                            "card": _oc, "cb": _oc_cb, "annual": _oc_annual,
+                            "net": _net_annual, "top_cats": sorted(_oc_best_cats, key=lambda x: -x[1])[:3]
+                        })
+                    _suggestions.sort(key=lambda x: -x["net"])
+                    for _sg in _suggestions[:3]:
+                        _card = _sg["card"]
+                        _net = _sg["net"]
+                        _annual = _sg["annual"]
+                        _fee = _card.get("annual_fee", 0)
+                        _fee_tag = "FREE" if _fee == 0 else f"{_sc_sym}{_fee}/yr"
+                        _top_cat_tags = " ".join([f'<span style="display:inline-block;padding:3px 8px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:4px;font-size:10px;color:#00d4ff;margin-right:4px">{c} {r:.0f}%</span>' for c, r in _sg["top_cats"]]) if _sg["top_cats"] else ""
+                        _apply_btn = f'<a href="{_card.get("apply_url","#")}" target="_blank" style="display:inline-block;padding:6px 16px;background:linear-gradient(135deg,#00f5a0,#00d4ff);color:#000;font-size:11px;font-weight:700;border-radius:6px;text-decoration:none;font-family:DM Mono,monospace;letter-spacing:0.5px">APPLY NOW</a>' if _card.get("apply_url") else ""
+                        st.markdown(f'<div style="margin-bottom:12px;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(0,212,255,0.12);border-radius:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div><span style="font-size:15px;font-weight:700;color:#e8eaf0">{_card["bank"]} {_card["card_name"]}</span><span style="font-size:11px;color:rgba(255,255,255,0.35);margin-left:10px">{_fee_tag} · {_card["network"]}</span></div><div style="text-align:right"><div style="font-size:18px;font-weight:800;color:#00f5a0">{_sc_sym}{_net:,.0f}<span style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.4)">/yr net</span></div></div></div><div style="margin-bottom:10px">{_top_cat_tags}</div><div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:12px">Based on your spending, this card would earn ~{_sc_sym}{_annual:,.0f}/year in rewards{" (net after fee: "+_sc_sym+f"{_net:,.0f})" if _fee > 0 else ""}.</div><div>{_apply_btn}</div></div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div style="padding:14px;background:rgba(0,245,160,0.06);border:1px solid rgba(0,245,160,0.15);border-radius:10px;font-size:13px;color:#00f5a0">You already own all available cards for your region — maximum coverage!</div>', unsafe_allow_html=True)
 
 
 
