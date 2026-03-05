@@ -147,11 +147,53 @@ def load_card_databases():
 SC_CARD_MASTER, SC_CARD_REWARDS = load_card_databases()
 SC_RWD  = {r["card_id"]: r["rates"] for r in SC_CARD_REWARDS}
 SC_NAME = {c["card_id"]: c["bank"]+" "+c["card_name"] for c in SC_CARD_MASTER}
+SC_COUNTRY = {c["card_id"]: c.get("country", "IN") for c in SC_CARD_MASTER}
 SC_CMAP = {
     "Food & Dining":"Food & Dining", "Grocery":"Grocery",
     "Shopping":"Shopping", "Travel":"Travel", "Fuel":"Fuel",
     "Healthcare":"Healthcare", "Entertainment":"Entertainment",
     "Utility":"Utility", "Salary":"Other", "Other":"Other"}
+
+# ── Currency config ─────────────────────────────────────────
+CURRENCY_CONFIG = {
+    "IN": {"symbol": "₹", "code": "INR", "label": "India (₹)", "k": "K", "big": "L", "huge": "Cr", "k_div": 1e3, "big_div": 1e5, "huge_div": 1e7},
+    "US": {"symbol": "$", "code": "USD", "label": "United States ($)", "k": "K", "big": "K", "huge": "M", "k_div": 1e3, "big_div": 1e3, "huge_div": 1e6},
+    "UK": {"symbol": "£", "code": "GBP", "label": "United Kingdom (£)", "k": "K", "big": "K", "huge": "M", "k_div": 1e3, "big_div": 1e3, "huge_div": 1e6},
+    "CA": {"symbol": "C$", "code": "CAD", "label": "Canada (C$)", "k": "K", "big": "K", "huge": "M", "k_div": 1e3, "big_div": 1e3, "huge_div": 1e6},
+    "AU": {"symbol": "A$", "code": "AUD", "label": "Australia (A$)", "k": "K", "big": "K", "huge": "M", "k_div": 1e3, "big_div": 1e3, "huge_div": 1e6},
+}
+
+def detect_currency(df):
+    """Detect currency from transaction text and amount columns."""
+    raw = " ".join(df["TRANSACTION DETAILS"].astype(str).str.upper().tolist())
+    # Check amount columns for currency symbols before they're cleaned
+    amt_text = " ".join(df[["WITHDRAWAL AMT", "DEPOSIT AMT", "BALANCE AMT"]].astype(str).values.flatten())
+    combined = raw + " " + amt_text
+    # Score each currency
+    scores = {"IN": 0, "US": 0, "UK": 0, "CA": 0, "AU": 0}
+    # US signals
+    import re as _cre
+    if _cre.search(r"CHASE|WELLS\s*FARGO|BANK\s*OF\s*AMERICA|CITI\s*BANK|CAPITAL\s*ONE|US\s*BANK|ZELLE|VENMO|CASHAPP", raw):
+        scores["US"] += 5
+    if _cre.search(r"(?<![CA])\$\d", combined): scores["US"] += 3
+    # UK signals
+    if _cre.search(r"BARCLAYS|HSBC|NATWEST|LLOYDS|SANTANDER\s*UK|MONZO|REVOLUT|STARLING|FASTER\s*PAYMENT", raw):
+        scores["UK"] += 5
+    if "£" in combined: scores["UK"] += 4
+    # Canada signals
+    if _cre.search(r"TD\s*CANADA|SCOTIABANK|CIBC|BMO|RBC\s*ROYAL|TANGERINE|INTERAC|E-?TRANSFER", raw):
+        scores["CA"] += 5
+    if _cre.search(r"C\$\d|CAD", combined): scores["CA"] += 3
+    # Australia signals
+    if _cre.search(r"COMMBANK|COMMONWEALTH\s*BANK|WESTPAC|ANZ\s*BANK|NAB\s*BANK|NAB\b|AFTERPAY|BPAY|OSKO", raw):
+        scores["AU"] += 5
+    if _cre.search(r"A\$\d|AUD", combined): scores["AU"] += 3
+    # India signals
+    if _cre.search(r"HDFC|ICICI|SBI|AXIS|KOTAK|IDFC|UPI|NEFT|RTGS|IMPS|@YBL|@OKI?CICI|@PAYTM", raw):
+        scores["IN"] += 5
+    if "₹" in combined or "Rs" in combined: scores["IN"] += 4
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else "IN"
 
 
 def sc_best(amount, category, wallet):
@@ -749,6 +791,9 @@ def process_file(uploaded, pdf_password=""):
     # ── Parse dates ───────────────────────────────────────────────
     df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
 
+    # ── Detect currency before cleaning symbols ─────────────────
+    st.session_state["currency"] = detect_currency(df)
+
     # ── Clean and convert amounts ─────────────────────────────────
     # Bank PDFs use "1,199.00" — commas must be stripped or
     # pd.to_numeric returns NaN, everything becomes 0, pipeline crashes
@@ -757,6 +802,10 @@ def process_file(uploaded, pdf_password=""):
                           .str.replace(",", "", regex=False)
                           .str.replace("Rs.", "", regex=False).str.replace("₹", "", regex=False)
                           .str.replace("Rs", "", regex=False)
+                          .str.replace("$", "", regex=False).str.replace("£", "", regex=False)
+                          .str.replace("A$", "", regex=False).str.replace("C$", "", regex=False)
+                          .str.replace("USD", "", regex=False).str.replace("GBP", "", regex=False)
+                          .str.replace("CAD", "", regex=False).str.replace("AUD", "", regex=False)
                           .str.strip())
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
@@ -774,6 +823,7 @@ def process_file(uploaded, pdf_password=""):
     df["CATEGORY"] = df["TRANSACTION DETAILS"].apply(categorize)
 
     # ── Anomaly Detection ─────────────────────────────────────────
+    _csym = CURRENCY_CONFIG.get(st.session_state.get("currency", "IN"), CURRENCY_CONFIG["IN"])["symbol"]
     # ── Contextual Flagging Engine ──
     # Categories that are naturally spiky — need higher thresholds
     _HIGH_VAR_CATS = {"Travel & Transport", "UPI Payment", "Shopping",
@@ -811,8 +861,8 @@ def process_file(uploaded, pdf_password=""):
                 _rv=_rms.get(str(_row["_MP"]),_mm) or _mm
                 if _rv<=0: continue
                 _rt=_row["WITHDRAWAL AMT"]/_rv
-                if _rt>=_t_hard: _aa(_i,3,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected ₹{_rv:,.0f} — significant spike.")
-                elif _rt>=_t_soft: _aa(_i,2,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected ₹{_rv:,.0f} — above normal.")
+                if _rt>=_t_hard: _aa(_i,3,f"{_cat}: {_csym}{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected {_csym}{_rv:,.0f} — significant spike.")
+                elif _rt>=_t_soft: _aa(_i,2,f"{_cat}: {_csym}{_row['WITHDRAWAL AMT']:,.0f} is {_rt:.1f}x expected {_csym}{_rv:,.0f} — above normal.")
         elif _ct=="B":
             _t_hard = 4.0 if _is_hv else 2.9
             _t_soft = 3.0 if _is_hv else 1.9
@@ -824,8 +874,8 @@ def process_file(uploaded, pdf_password=""):
                 _sb=_cr[(_cr["_MP"]==_mp)&(_cr["WITHDRAWAL AMT"]>0)]
                 if _sb.empty: continue
                 _ai=_sb["WITHDRAWAL AMT"].idxmax()
-                if _rt>_t_hard: _aa(_ai,3,f"{_cat}: Monthly ₹{_mt:,.0f} is {_rt:.1f}x rolling avg ₹{_rv:,.0f} — extreme spike.")
-                elif _rt>_t_soft: _aa(_ai,2,f"{_cat}: Monthly ₹{_mt:,.0f} is {_rt:.1f}x rolling avg ₹{_rv:,.0f} — unusually high.")
+                if _rt>_t_hard: _aa(_ai,3,f"{_cat}: Monthly {_csym}{_mt:,.0f} is {_rt:.1f}x rolling avg {_csym}{_rv:,.0f} — extreme spike.")
+                elif _rt>_t_soft: _aa(_ai,2,f"{_cat}: Monthly {_csym}{_mt:,.0f} is {_rt:.1f}x rolling avg {_csym}{_rv:,.0f} — unusually high.")
         elif _ct=="C":
             _cs=_cr.sort_values("DATE")
             for _i,_row in _cs.iterrows():
@@ -834,7 +884,7 @@ def process_file(uploaded, pdf_password=""):
                 if not _is_hv:
                     if _pc>=2: _aa(_i,3,f"{_cat}: {_pc+1} transactions in 60 days — unusually frequent.")
                     elif _pc==1: _aa(_i,2,f"{_cat}: 2nd transaction in {(_row['DATE']-_pr['DATE'].max()).days}d — typically rare.")
-                if _hmx>0 and _row["WITHDRAWAL AMT"]>_hmx*1.5: _aa(_i,3,f"{_cat}: ₹{_row['WITHDRAWAL AMT']:,.0f} is 1.5x+ historical max ₹{_hmx:,.0f}.")
+                if _hmx>0 and _row["WITHDRAWAL AMT"]>_hmx*1.5: _aa(_i,3,f"{_cat}: {_csym}{_row['WITHDRAWAL AMT']:,.0f} is 1.5x+ historical max {_csym}{_hmx:,.0f}.")
     for _i,(_lv,_rs) in _am.items():
         df.at[_i,"ALERT_LEVEL"]=_lv; df.at[_i,"ALERT_REASON"]=_rs
     df["IS_ANOMALY"] = (df["ALERT_LEVEL"]>0).astype(int)
@@ -855,19 +905,29 @@ def dark_fig(rows, cols, size):
     return fig, axes
 
 
-def cfmt(x, pos):
+def cfmt(x, pos, currency=None):
+    if currency is None:
+        currency = st.session_state.get("currency", "IN")
+    cc = CURRENCY_CONFIG.get(currency, CURRENCY_CONFIG["IN"])
+    sym = cc["symbol"]
     raw = abs(x)
-    if raw >= 1e7:   return "₹" + str(round(x/1e7, 1)) + "Cr"
-    elif raw >= 1e5: return "₹" + str(round(x/1e5, 1)) + "L"
-    elif raw >= 1e3: return "₹" + str(round(x/1e3, 1)) + "K"
-    else:            return "₹" + str(round(x, 0))[:-2]
+    if raw >= cc["huge_div"] * 1:
+        return sym + str(round(x/cc["huge_div"], 1)) + cc["huge"]
+    elif raw >= cc["big_div"] * 1:
+        return sym + str(round(x/cc["big_div"], 1)) + cc["big"]
+    elif raw >= cc["k_div"]:
+        return sym + str(round(x/cc["k_div"], 1)) + cc["k"]
+    else:
+        return sym + str(round(x, 0))[:-2]
 
 
 def build_context(df):
+    cur = st.session_state.get("currency", "IN")
+    cc = CURRENCY_CONFIG.get(cur, CURRENCY_CONFIG["IN"])
     raw_total = df["WITHDRAWAL AMT"].sum()
-    if raw_total >= 1e7:   scale, slbl = 1e7, "Crores"
-    elif raw_total >= 1e5: scale, slbl = 1e5, "Lakhs"
-    else:                  scale, slbl = 1,   "Rupees"
+    if raw_total >= cc["huge_div"]:   scale, slbl = cc["huge_div"], cc["huge"]
+    elif raw_total >= cc["big_div"]:  scale, slbl = cc["big_div"], cc["big"]
+    else:                             scale, slbl = 1, cc["code"]
     total_wd    = round(df["WITHDRAWAL AMT"].sum() / scale, 2)
     total_dep   = round(df["DEPOSIT AMT"].sum() / scale, 2)
     avg_monthly = round(df.groupby("MONTH")["WITHDRAWAL AMT"].sum().mean() / scale, 2)
@@ -1254,10 +1314,11 @@ else:
                 st.session_state["guard_monthly_val"] = _default_monthly
             _gc1, _gc2, _gc3 = st.columns([1, 1, 1])
             with _gc1:
-                st.markdown('<div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace;letter-spacing:1px;margin-bottom:4px">MAX PER TRANSACTION (₹)</div>', unsafe_allow_html=True)
+                _dsym = CURRENCY_CONFIG.get(st.session_state.get("currency","IN"), CURRENCY_CONFIG["IN"])["symbol"]
+                st.markdown(f'<div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace;letter-spacing:1px;margin-bottom:4px">MAX PER TRANSACTION ({_dsym})</div>', unsafe_allow_html=True)
                 _guard_txn_str = st.text_input("txn_limit", value=st.session_state["guard_txn_val"], key="guard_txn_input", label_visibility="collapsed", placeholder="e.g. 10000")
             with _gc2:
-                st.markdown('<div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace;letter-spacing:1px;margin-bottom:4px">MONTHLY BUDGET LIMIT (₹)</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace;letter-spacing:1px;margin-bottom:4px">MONTHLY BUDGET LIMIT ({_dsym})</div>', unsafe_allow_html=True)
                 _guard_monthly_str = st.text_input("monthly_limit", value=st.session_state["guard_monthly_val"], key="guard_monthly_input", label_visibility="collapsed", placeholder="e.g. 50000")
             with _gc3:
                 st.markdown('<div style="font-size:10px;color:rgba(255,255,255,0.4);font-family:DM Mono,monospace;letter-spacing:1px;margin-bottom:4px">WATCH CATEGORIES</div>', unsafe_allow_html=True)
@@ -1274,9 +1335,9 @@ else:
             # Parse text inputs safely
             _active_txn_str = st.session_state.get("guard_txn_val", _default_txn)
             _active_monthly_str = st.session_state.get("guard_monthly_val", _default_monthly)
-            try: _guard_txn = int(str(_active_txn_str).replace(",","").replace("₹","").strip())
+            try: _guard_txn = int(str(_active_txn_str).replace(",","").replace("₹","").replace("$","").replace("£","").strip())
             except: _guard_txn = 10000
-            try: _guard_monthly = int(str(_active_monthly_str).replace(",","").replace("₹","").strip())
+            try: _guard_monthly = int(str(_active_monthly_str).replace(",","").replace("₹","").replace("$","").replace("£","").strip())
             except: _guard_monthly = 50000
             # Reset guardrail-level flags before re-applying (keep contextual flags)
             _ctx_mask = df["ALERT_LEVEL"] == 3  # preserve hard alerts from contextual engine
@@ -1286,7 +1347,7 @@ else:
             for _gi, _grow in df.iterrows():
                 _reasons = []
                 if _grow["WITHDRAWAL AMT"] >= _guard_txn:
-                    _reasons.append(f"₹{_grow['WITHDRAWAL AMT']:,.0f} exceeds your ₹{_guard_txn:,.0f} per-txn limit")
+                    _reasons.append(f"{_dsym}{_grow['WITHDRAWAL AMT']:,.0f} exceeds your {_dsym}{_guard_txn:,.0f} per-txn limit")
                 if _guard_cats and _grow["CATEGORY"] in _guard_cats and _grow["WITHDRAWAL AMT"] > 0:
                     _reasons.append(f"'{_grow['CATEGORY']}' is on your watch list")
                 if _reasons:
@@ -1301,7 +1362,7 @@ else:
                     _top_idx = _ob_rows["WITHDRAWAL AMT"].idxmax()
                     if df.at[_top_idx, "ALERT_LEVEL"] < 1:
                         df.at[_top_idx, "ALERT_LEVEL"] = 1
-                        df.at[_top_idx, "ALERT_REASON"] = f"Month total ₹{_monthly_totals[_obm]:,.0f} exceeds your ₹{_guard_monthly:,.0f} budget"
+                        df.at[_top_idx, "ALERT_REASON"] = f"Month total {_dsym}{_monthly_totals[_obm]:,.0f} exceeds your {_dsym}{_guard_monthly:,.0f} budget"
             df["IS_ANOMALY"] = (df["ALERT_LEVEL"] > 0).astype(int)
             st.session_state.user_df = df
             # ── Metrics (NOW correct since guardrails already applied) ──
@@ -1365,7 +1426,7 @@ else:
                     _yir_fig = _yirgo.Figure()
                     _yir_fig.add_trace(_yirgo.Bar(x=_yir_months,y=_yir_vals,
                         marker_color=["#00f5a0" if v==max(_yir_vals) else "#1a3a2a" for v in _yir_vals],
-                        hovertemplate="<b>%{x}</b><br>₹%{y:,.0f}<extra></extra>"))
+                        hovertemplate="<b>%{x}</b><br>" + CURRENCY_CONFIG.get(st.session_state.get("currency","IN"), CURRENCY_CONFIG["IN"])["symbol"] + "%{y:,.0f}<extra></extra>"))
                     _yir_fig.update_layout(paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
                         margin=dict(l=0,r=0,t=0,b=0),height=140,
                         xaxis=dict(showgrid=False,color="#444",tickfont=dict(size=9)),
@@ -1594,14 +1655,27 @@ else:
 
 
     with tab5:
-        st.markdown('<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 01 — SMARTCASH</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💳 Card Reward Maximiser</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Find the best card in your wallet for every rupee you spend.</div></div>', unsafe_allow_html=True)
+        _sc_cur = st.session_state.get("currency", "IN")
+        _sc_cc = CURRENCY_CONFIG.get(_sc_cur, CURRENCY_CONFIG["IN"])
+        _sc_sym = _sc_cc["symbol"]
+        st.markdown(f'<div style="padding:32px 40px 0"><div style="font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:3px;margin-bottom:8px">FEATURE 01 — SMARTCASH</div><div style="font-size:26px;font-weight:800;margin-bottom:8px">💳 Card Reward Maximiser</div><div style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px">Find the best card in your wallet for every {_sc_cc["code"]} you spend.</div></div>', unsafe_allow_html=True)
         if st.session_state.get("user_df") is None:
             st.info("Upload your bank statement in the UPLOAD tab first.")
         elif not SC_CARD_MASTER:
             st.error("Card database failed to load — check card_master.json on GitHub.")
         else:
             df_sc = st.session_state["user_df"]
-            card_opts = {c["bank"]+" — "+c["card_name"]+" ("+("FREE" if c["annual_fee"]==0 else "₹"+str(c["annual_fee"])+"/yr")+")": c["card_id"] for c in SC_CARD_MASTER}
+            # Country override selector
+            _country_labels = {v["label"]: k for k, v in CURRENCY_CONFIG.items()}
+            _det_label = _sc_cc["label"]
+            _sel_country = st.selectbox("Region", list(_country_labels.keys()), index=list(_country_labels.keys()).index(_det_label), key="sc_country_sel", help="Auto-detected from your statement. Override if needed.")
+            _sc_cur = _country_labels[_sel_country]
+            _sc_cc = CURRENCY_CONFIG[_sc_cur]
+            _sc_sym = _sc_cc["symbol"]
+            # Filter cards by selected country
+            _sc_cards_filtered = [c for c in SC_CARD_MASTER if c.get("country", "IN") == _sc_cur]
+            _fee_sym = _sc_sym if _sc_cur != "IN" else "₹"
+            card_opts = {c["bank"]+" — "+c["card_name"]+" ("+("FREE" if c["annual_fee"]==0 else _fee_sym+str(c["annual_fee"])+"/yr")+")": c["card_id"] for c in _sc_cards_filtered}
             import re as _re
             _wdr = df_sc[df_sc["WITHDRAWAL AMT"]>0]["TRANSACTION DETAILS"].astype(str).str.upper()
             _all_txn_text = " ".join(_wdr.tolist())
@@ -1609,54 +1683,66 @@ else:
             _all_keys = list(card_opts.keys())
             # Broad patterns: match bank names in any context (UPI handles, NEFT, bill pay, etc.)
             _bank_patterns = [
-                # HDFC — matches HDFCBK, HDFC BANK, HDFC CC, @hdfc, HDFC CREDIT, etc.
+                # Indian banks
                 (r"HDFC|HDFCBK|@HDFC",              "HDFC Bank"),
-                # Axis — matches AXIS BANK, AXISB, @axl, AXIS CC, etc.
                 (r"AXIS\s*BANK|AXISB|@AXIS|@AXL|AXIS.*(CC|CARD|CREDIT|CRD)", "Axis Bank"),
-                # ICICI — matches ICICI, ICICIB, @icici, ICICI CC, etc.
                 (r"ICICI|ICICIB|@ICICI",             "ICICI Bank"),
-                # SBI — matches SBICARD, SBI CARD, SBICRD, SBI CC, @SBI
                 (r"SBI\s*CARD|SBICRD|SBI.*(CC|CREDIT|CRD)|@SBI", "SBI Card"),
-                # Kotak — matches KOTAK, @kotak, KOTAK CC, etc.
                 (r"KOTAK|@KOTAK",                    "Kotak Mahindra Bank"),
-                # IDFC — matches IDFC, IDFCFIRST, @IDFCFIRST, etc.
                 (r"IDFC|IDFCFIRST|@IDFC",           "IDFC FIRST Bank"),
-                # Yes Bank
                 (r"YES\s*BANK|YESBK|@YBL|@YESBANK", "Yes Bank"),
-                # RBL Bank
                 (r"RBL\s*BANK|RBLBANK|@RBL",        "RBL Bank"),
-                # Amex
                 (r"AMEX|AMERICAN\s*EXPRESS|AMERICANEXPRESS", "American Express"),
-                # Generic credit card payment keywords — try to extract bank from context
                 (r"CRED\b.*HDFC|HDFC.*CRED\b",      "HDFC Bank"),
                 (r"CRED\b.*AXIS|AXIS.*CRED\b",      "Axis Bank"),
                 (r"CRED\b.*ICICI|ICICI.*CRED\b",    "ICICI Bank"),
                 (r"CRED\b.*SBI|SBI.*CRED\b",        "SBI Card"),
+                # US banks
+                (r"CHASE|JP\s*MORGAN",               "Chase"),
+                (r"CAPITAL\s*ONE|CAP\s*ONE",         "Capital One"),
+                (r"CITI\s*BANK|CITIBANK|CITI\s*CARD", "Citi"),
+                (r"AMEX.*BLUE\s*CASH|BLUE\s*CASH",  "American Express"),
+                # UK banks
+                (r"BARCLAYS",                        "Barclays"),
+                (r"HSBC",                            "HSBC"),
+                (r"NATWEST",                         "NatWest"),
+                (r"LLOYDS|MONZO|STARLING",           "NatWest"),
+                # Canada banks
+                (r"TD\s*CANADA|TD\s*BANK|TD\b",     "TD"),
+                (r"SCOTIABANK|SCOTIA",               "Scotiabank"),
+                (r"CIBC",                            "CIBC"),
+                (r"TANGERINE",                       "Tangerine"),
+                # Australia banks
+                (r"COMMBANK|COMMONWEALTH\s*BANK",    "CommBank"),
+                (r"WESTPAC",                         "Westpac"),
+                (r"ANZ\s*BANK|ANZ\b",               "ANZ"),
+                (r"NAB\s*BANK|NAB\b",               "NAB"),
             ]
             for _pat, _bank in _bank_patterns:
                 if _re.search(_pat, _all_txn_text):
                     for _k in _all_keys:
                         if _k.startswith(_bank) and _k not in _auto:
                             _auto.append(_k)
-            # Also check UPI VPA handles (e.g., @hdfcbank, @icici, @sbi, @axisbank)
-            _vpa_bank_map = {
-                "hdfcbank": "HDFC Bank", "hdfc": "HDFC Bank",
-                "icici": "ICICI Bank", "icicibank": "ICICI Bank",
-                "axisbank": "Axis Bank", "axis": "Axis Bank", "axl": "Axis Bank",
-                "sbi": "SBI Card", "sbicard": "SBI Card",
-                "kotak": "Kotak Mahindra Bank", "kotakbank": "Kotak Mahindra Bank",
-                "idfcfirst": "IDFC FIRST Bank", "idfc": "IDFC FIRST Bank",
-                "yesbank": "Yes Bank", "ybl": "Yes Bank",
-                "rbl": "RBL Bank", "rblbank": "RBL Bank",
-            }
-            _vpa_matches = _re.findall(r"@([A-Z0-9]+)", _all_txn_text)
-            for _vpa in _vpa_matches:
-                _vpa_lower = _vpa.lower()
-                _bank = _vpa_bank_map.get(_vpa_lower)
-                if _bank:
-                    for _k in _all_keys:
-                        if _k.startswith(_bank) and _k not in _auto:
-                            _auto.append(_k)
+            # Also check UPI VPA handles for Indian banks
+            if _sc_cur == "IN":
+                _vpa_bank_map = {
+                    "hdfcbank": "HDFC Bank", "hdfc": "HDFC Bank",
+                    "icici": "ICICI Bank", "icicibank": "ICICI Bank",
+                    "axisbank": "Axis Bank", "axis": "Axis Bank", "axl": "Axis Bank",
+                    "sbi": "SBI Card", "sbicard": "SBI Card",
+                    "kotak": "Kotak Mahindra Bank", "kotakbank": "Kotak Mahindra Bank",
+                    "idfcfirst": "IDFC FIRST Bank", "idfc": "IDFC FIRST Bank",
+                    "yesbank": "Yes Bank", "ybl": "Yes Bank",
+                    "rbl": "RBL Bank", "rblbank": "RBL Bank",
+                }
+                _vpa_matches = _re.findall(r"@([A-Z0-9]+)", _all_txn_text)
+                for _vpa in _vpa_matches:
+                    _vpa_lower = _vpa.lower()
+                    _bank = _vpa_bank_map.get(_vpa_lower)
+                    if _bank:
+                        for _k in _all_keys:
+                            if _k.startswith(_bank) and _k not in _auto:
+                                _auto.append(_k)
             if _auto:
                 st.markdown(f'<div style="margin-bottom:10px;padding:10px 14px;background:rgba(0,245,160,0.06);border:1px solid rgba(0,245,160,0.2);border-radius:8px;font-size:12px;color:#00f5a0">⚡ Auto-detected {len(_auto)} card(s) from your statement — confirm or edit below</div>', unsafe_allow_html=True)
             sel = st.multiselect("Select credit cards you own:", _all_keys, default=_auto, key="sc_wallet_sel")
@@ -1674,18 +1760,18 @@ else:
                 tot_ex = rdf["EXTRA"].sum()
                 eff_r  = (tot_cb/tot_sp*100) if tot_sp>0 else 0
                 c1,c2,c3,c4 = st.columns(4)
-                c1.markdown(f'<div class="metric-card"><div class="metric-lbl">TOTAL SPEND</div><div class="metric-val">₹{tot_sp:,.0f}</div></div>', unsafe_allow_html=True)
-                c2.markdown(f'<div class="metric-card"><div class="metric-lbl">BEST CASHBACK</div><div class="metric-val">₹{tot_cb:,.0f}</div></div>', unsafe_allow_html=True)
-                c3.markdown(f'<div class="metric-card"><div class="metric-lbl">EXTRA vs 1% CARD</div><div class="metric-val">₹{tot_ex:,.0f}</div></div>', unsafe_allow_html=True)
+                c1.markdown(f'<div class="metric-card"><div class="metric-lbl">TOTAL SPEND</div><div class="metric-val">{_sc_sym}{tot_sp:,.0f}</div></div>', unsafe_allow_html=True)
+                c2.markdown(f'<div class="metric-card"><div class="metric-lbl">BEST CASHBACK</div><div class="metric-val">{_sc_sym}{tot_cb:,.0f}</div></div>', unsafe_allow_html=True)
+                c3.markdown(f'<div class="metric-card"><div class="metric-lbl">EXTRA vs 1% CARD</div><div class="metric-val">{_sc_sym}{tot_ex:,.0f}</div></div>', unsafe_allow_html=True)
                 c4.markdown(f'<div class="metric-card"><div class="metric-lbl">EFFECTIVE RATE</div><div class="metric-val">{eff_r:.2f}%</div></div>', unsafe_allow_html=True)
                 st.markdown("<div style='margin:20px 0 8px'><b>Category Guide — Best card per spend type:</b></div>", unsafe_allow_html=True)
                 for _, crow in scat.iterrows():
                     pct = min(int(crow["avg_rate"]/6*100), 100)
-                    st.markdown(f'<div style="margin-bottom:8px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><b>{crow["CATEGORY"]}</b><span style="color:#00f5a0;font-size:11px;font-family:DM Mono,monospace">Use → {crow["best_card"]}</span></div><div style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:8px">₹{crow["spend"]:,.0f} spent · {crow["txns"]:,} txns · earns ₹{crow["cashback"]:,.0f} at {crow["avg_rate"]:.1f}%</div><div style="background:rgba(255,255,255,0.06);border-radius:3px;height:3px"><div style="background:linear-gradient(90deg,#00f5a0,#00d4ff);width:{pct}%;height:3px;border-radius:3px"></div></div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="margin-bottom:8px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><b>{crow["CATEGORY"]}</b><span style="color:#00f5a0;font-size:11px;font-family:DM Mono,monospace">Use → {crow["best_card"]}</span></div><div style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:8px">{_sc_sym}{crow["spend"]:,.0f} spent · {crow["txns"]:,} txns · earns {_sc_sym}{crow["cashback"]:,.0f} at {crow["avg_rate"]:.1f}%</div><div style="background:rgba(255,255,255,0.06);border-radius:3px;height:3px"><div style="background:linear-gradient(90deg,#00f5a0,#00d4ff);width:{pct}%;height:3px;border-radius:3px"></div></div></div>', unsafe_allow_html=True)
                 st.markdown("<div style='margin:20px 0 8px'><b>Top 20 Transactions — Best card to use:</b></div>", unsafe_allow_html=True)
                 top20 = rdf.nlargest(20,"BEST_CASHBACK")[["DATE","DESCRIPTION","CATEGORY","AMOUNT","BEST_CARD","BEST_RATE","BEST_CASHBACK"]].copy()
-                top20["AMOUNT"]        = top20["AMOUNT"].apply(lambda x: f"₹{x:,.0f}")
-                top20["BEST_CASHBACK"] = top20["BEST_CASHBACK"].apply(lambda x: f"₹{x:,.0f}")
+                top20["AMOUNT"]        = top20["AMOUNT"].apply(lambda x: f"{_sc_sym}{x:,.0f}")
+                top20["BEST_CASHBACK"] = top20["BEST_CASHBACK"].apply(lambda x: f"{_sc_sym}{x:,.0f}")
                 top20["BEST_RATE"]     = top20["BEST_RATE"].apply(lambda x: f"{x:.1f}%")
                 st.dataframe(top20, use_container_width=True, hide_index=True)
 

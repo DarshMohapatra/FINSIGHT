@@ -298,5 +298,329 @@
       "benefit_value": 4500
     },
     "notes": "Conservative rates shown. Points worth up to 4x more via airline transfers."
+  },
+
+  {
+    "card_id": "CHASE_FREEDOM_UNLIMITED",
+    "rates": {
+      "Food & Dining": 3.0,
+      "Grocery": 3.0,
+      "Shopping": 1.5,
+      "Travel": 5.0,
+      "Fuel": 1.5,
+      "Healthcare": 1.5,
+      "Entertainment": 1.5,
+      "Utility": 1.5,
+      "Other": 1.5
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "$200 bonus after $500 in first 3 months",
+      "benefit_value": 200
+    },
+    "notes": "1.5% flat on everything + 3% on dining/drugstores + 5% on travel via Chase portal."
+  },
+  {
+    "card_id": "AMEX_BLUE_CASH_PREFERRED",
+    "rates": {
+      "Food & Dining": 1.0,
+      "Grocery": 6.0,
+      "Shopping": 1.0,
+      "Travel": 3.0,
+      "Fuel": 3.0,
+      "Healthcare": 1.0,
+      "Entertainment": 6.0,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "$350 welcome bonus after $3,000 in 6 months",
+      "benefit_value": 350
+    },
+    "notes": "6% at US supermarkets (up to $6K/yr), 6% on streaming. Best US grocery card."
+  },
+  {
+    "card_id": "CITI_DOUBLE_CASH",
+    "rates": {
+      "Food & Dining": 2.0,
+      "Grocery": 2.0,
+      "Shopping": 2.0,
+      "Travel": 2.0,
+      "Fuel": 2.0,
+      "Healthcare": 2.0,
+      "Entertainment": 2.0,
+      "Utility": 2.0,
+      "Other": 2.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "Flat 2% on everything — no categories to track",
+      "benefit_value": 0
+    },
+    "notes": "1% when you buy + 1% when you pay. Best flat-rate no-fee card in the US."
+  },
+  {
+    "card_id": "CAPITAL_ONE_SAVOR",
+    "rates": {
+      "Food & Dining": 3.0,
+      "Grocery": 3.0,
+      "Shopping": 1.0,
+      "Travel": 1.0,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 3.0,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "$200 bonus after $500 in 3 months",
+      "benefit_value": 200
+    },
+    "notes": "3% on dining, entertainment, grocery + popular streaming. No annual fee."
+  },
+
+  {
+    "card_id": "BARCLAYS_AVIOS_PLUS",
+    "rates": {
+      "Food & Dining": 1.5,
+      "Grocery": 1.0,
+      "Shopping": 1.5,
+      "Travel": 1.5,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 1.0,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 10000,
+      "benefit": "Cabin upgrade voucher",
+      "benefit_value": 200
+    },
+    "notes": "Earns Avios points. Best value on British Airways flights."
+  },
+  {
+    "card_id": "AMEX_CASHBACK_UK",
+    "rates": {
+      "Food & Dining": 1.0,
+      "Grocery": 1.0,
+      "Shopping": 1.0,
+      "Travel": 1.0,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 1.0,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "No fee — 1% cashback on everything",
+      "benefit_value": 0
+    },
+    "notes": "Simple flat 1% cashback. Up to 5% intro rate for first 3 months."
+  },
+  {
+    "card_id": "HSBC_WORLD_ELITE_UK",
+    "rates": {
+      "Food & Dining": 2.0,
+      "Grocery": 1.0,
+      "Shopping": 1.0,
+      "Travel": 2.0,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 1.0,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "Airport lounge access + travel insurance",
+      "benefit_value": 200
+    },
+    "notes": "Premium UK card. 1% cashback + lounge access. Good for frequent travellers."
+  },
+  {
+    "card_id": "NATWEST_REWARD",
+    "rates": {
+      "Food & Dining": 0.5,
+      "Grocery": 0.5,
+      "Shopping": 0.5,
+      "Travel": 0.5,
+      "Fuel": 0.5,
+      "Healthcare": 0.5,
+      "Entertainment": 0.5,
+      "Utility": 0.5,
+      "Other": 0.5
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "No fee — MyRewards points on all purchases",
+      "benefit_value": 0
+    },
+    "notes": "Low rate but no annual fee. Points redeemable as cashback or vouchers."
+  },
+
+  {
+    "card_id": "TD_CASH_BACK_VISA_INFINITE",
+    "rates": {
+      "Food & Dining": 1.0,
+      "Grocery": 3.0,
+      "Shopping": 1.0,
+      "Travel": 1.0,
+      "Fuel": 3.0,
+      "Healthcare": 1.0,
+      "Entertainment": 1.0,
+      "Utility": 3.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "10% cashback on first C$2,000 in first 3 months",
+      "benefit_value": 200
+    },
+    "notes": "3% on grocery, gas, recurring bills. Best everyday card in Canada."
+  },
+  {
+    "card_id": "SCOTIABANK_MOMENTUM_VISA_INFINITE",
+    "rates": {
+      "Food & Dining": 2.0,
+      "Grocery": 4.0,
+      "Shopping": 1.0,
+      "Travel": 2.0,
+      "Fuel": 2.0,
+      "Healthcare": 1.0,
+      "Entertainment": 2.0,
+      "Utility": 2.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "10% cashback on first C$2,000 in first 3 months",
+      "benefit_value": 200
+    },
+    "notes": "4% grocery, 2% gas/transit/recurring. Top Canadian grocery card."
+  },
+  {
+    "card_id": "CIBC_DIVIDEND_VISA_INFINITE",
+    "rates": {
+      "Food & Dining": 1.0,
+      "Grocery": 4.0,
+      "Shopping": 1.0,
+      "Travel": 1.0,
+      "Fuel": 4.0,
+      "Healthcare": 1.0,
+      "Entertainment": 1.0,
+      "Utility": 4.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "10% cashback on first C$4,000 in 4 months",
+      "benefit_value": 400
+    },
+    "notes": "4% on grocery, gas, transit. CIBC's best cash back card."
+  },
+  {
+    "card_id": "TANGERINE_MONEY_BACK",
+    "rates": {
+      "Food & Dining": 0.5,
+      "Grocery": 2.0,
+      "Shopping": 2.0,
+      "Travel": 0.5,
+      "Fuel": 2.0,
+      "Healthcare": 0.5,
+      "Entertainment": 0.5,
+      "Utility": 0.5,
+      "Other": 0.5
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "No fee — pick 2-3 categories for 2%",
+      "benefit_value": 0
+    },
+    "notes": "No annual fee. Choose 2 categories at 2% (3 with Tangerine savings). 0.5% on rest."
+  },
+
+  {
+    "card_id": "COMMBANK_AWARDS",
+    "rates": {
+      "Food & Dining": 1.5,
+      "Grocery": 1.5,
+      "Shopping": 1.5,
+      "Travel": 2.0,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 1.5,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "130,000 bonus CommBank Awards points",
+      "benefit_value": 400
+    },
+    "notes": "Points transferable to Qantas, Asia Miles, Velocity. Good general rewards card."
+  },
+  {
+    "card_id": "WESTPAC_ALTITUDE_REWARDS",
+    "rates": {
+      "Food & Dining": 1.25,
+      "Grocery": 1.0,
+      "Shopping": 1.25,
+      "Travel": 2.0,
+      "Fuel": 0.5,
+      "Healthcare": 0.5,
+      "Entertainment": 1.0,
+      "Utility": 0.5,
+      "Other": 0.5
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "100,000 Altitude Rewards points",
+      "benefit_value": 350
+    },
+    "notes": "Points convert to Qantas or Velocity. Contactless payWave eligible."
+  },
+  {
+    "card_id": "ANZ_REWARDS_PLATINUM",
+    "rates": {
+      "Food & Dining": 1.0,
+      "Grocery": 1.0,
+      "Shopping": 1.0,
+      "Travel": 1.0,
+      "Fuel": 0.5,
+      "Healthcare": 0.5,
+      "Entertainment": 1.0,
+      "Utility": 0.5,
+      "Other": 0.5
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "No annual fee for first year",
+      "benefit_value": 0
+    },
+    "notes": "No annual fee in year one. Good entry-level rewards card in Australia."
+  },
+  {
+    "card_id": "NAB_QANTAS_REWARDS",
+    "rates": {
+      "Food & Dining": 1.5,
+      "Grocery": 1.0,
+      "Shopping": 1.0,
+      "Travel": 2.0,
+      "Fuel": 1.0,
+      "Healthcare": 1.0,
+      "Entertainment": 1.0,
+      "Utility": 1.0,
+      "Other": 1.0
+    },
+    "milestone": {
+      "target_spend": 0,
+      "benefit": "100,000 Qantas Points welcome bonus",
+      "benefit_value": 500
+    },
+    "notes": "Earns Qantas Points directly. Best for frequent Qantas flyers."
   }
 ]

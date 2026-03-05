@@ -7,12 +7,10 @@
     "joining_fee": 2500,
     "network": "Visa",
     "reward_type": "points",
-    "best_for": [
-      "Travel",
-      "Dining"
-    ],
+    "best_for": ["Travel", "Dining"],
     "lounge_access": true,
-    "apply_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/regalia-credit-card"
+    "apply_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/regalia-credit-card",
+    "country": "IN"
   },
   {
     "card_id": "HDFC_MILLENNIA",
@@ -22,13 +20,10 @@
     "joining_fee": 1000,
     "network": "Visa",
     "reward_type": "cashback",
-    "best_for": [
-      "Shopping",
-      "Food & Dining",
-      "Grocery"
-    ],
+    "best_for": ["Shopping", "Food & Dining", "Grocery"],
     "lounge_access": false,
-    "apply_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/millennia-credit-card"
+    "apply_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/millennia-credit-card",
+    "country": "IN"
   },
   {
     "card_id": "HDFC_MONEYBACK_PLUS",
@@ -38,12 +33,10 @@
     "joining_fee": 500,
     "network": "Mastercard",
     "reward_type": "cashback",
-    "best_for": [
-      "Shopping",
-      "Grocery"
-    ],
+    "best_for": ["Shopping", "Grocery"],
     "lounge_access": false,
-    "apply_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/moneyback-plus-credit-card"
+    "apply_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/moneyback-plus-credit-card",
+    "country": "IN"
   },
   {
     "card_id": "AXIS_ACE",
@@ -53,13 +46,10 @@
     "joining_fee": 499,
     "network": "Visa",
     "reward_type": "cashback",
-    "best_for": [
-      "Utility",
-      "Food & Dining",
-      "Travel"
-    ],
+    "best_for": ["Utility", "Food & Dining", "Travel"],
     "lounge_access": false,
-    "apply_url": "https://www.axisbank.com/retail/cards/credit-card/ace-credit-card"
+    "apply_url": "https://www.axisbank.com/retail/cards/credit-card/ace-credit-card",
+    "country": "IN"
   },
   {
     "card_id": "AXIS_FLIPKART",
@@ -69,12 +59,10 @@
     "joining_fee": 500,
     "network": "Mastercard",
     "reward_type": "cashback",
-    "best_for": [
-      "Shopping",
-      "Food & Dining"
-    ],
+    "best_for": ["Shopping", "Food & Dining"],
     "lounge_access": false,
-    "apply_url": "https://www.axisbank.com/retail/cards/credit-card/flipkart-axis-bank-credit-card"
+    "apply_url": "https://www.axisbank.com/retail/cards/credit-card/flipkart-axis-bank-credit-card",
+    "country": "IN"
   },
   {
     "card_id": "ICICI_AMAZON_PAY",
@@ -84,13 +72,10 @@
     "joining_fee": 0,
     "network": "Visa",
     "reward_type": "cashback",
-    "best_for": [
-      "Shopping",
-      "Utility",
-      "Food & Dining"
-    ],
+    "best_for": ["Shopping", "Utility", "Food & Dining"],
     "lounge_access": false,
-    "apply_url": "https://www.icicibank.com/personal-banking/cards/consumer-cards/credit-card/amazon-pay-credit-card"
+    "apply_url": "https://www.icicibank.com/personal-banking/cards/consumer-cards/credit-card/amazon-pay-credit-card",
+    "country": "IN"
   },
   {
     "card_id": "ICICI_CORAL",
@@ -100,12 +85,10 @@
     "joining_fee": 500,
     "network": "Visa",
     "reward_type": "points",
-    "best_for": [
-      "Dining",
-      "Entertainment"
-    ],
+    "best_for": ["Dining", "Entertainment"],
     "lounge_access": true,
-    "apply_url": "https://www.icicibank.com/personal-banking/cards/consumer-cards/credit-card/coral-credit-card"
+    "apply_url": "https://www.icicibank.com/personal-banking/cards/consumer-cards/credit-card/coral-credit-card",
+    "country": "IN"
   },
   {
     "card_id": "SBI_CASHBACK",
@@ -115,12 +98,10 @@
     "joining_fee": 999,
     "network": "Visa",
     "reward_type": "cashback",
-    "best_for": [
-      "Shopping",
-      "Utility"
-    ],
+    "best_for": ["Shopping", "Utility"],
     "lounge_access": false,
-    "apply_url": "https://www.sbicard.com/en/personal/credit-cards/rewards/sbi-card-cashback.page"
+    "apply_url": "https://www.sbicard.com/en/personal/credit-cards/rewards/sbi-card-cashback.page",
+    "country": "IN"
   },
   {
     "card_id": "SBI_SIMPLY_CLICK",
@@ -130,13 +111,10 @@
     "joining_fee": 499,
     "network": "Visa",
     "reward_type": "points",
-    "best_for": [
-      "Shopping",
-      "Entertainment",
-      "Food & Dining"
-    ],
+    "best_for": ["Shopping", "Entertainment", "Food & Dining"],
     "lounge_access": false,
-    "apply_url": "https://www.sbicard.com/en/personal/credit-cards/rewards/simplyclick-sbi-card.page"
+    "apply_url": "https://www.sbicard.com/en/personal/credit-cards/rewards/simplyclick-sbi-card.page",
+    "country": "IN"
   },
   {
     "card_id": "KOTAK_811",
@@ -146,12 +124,10 @@
     "joining_fee": 0,
     "network": "Visa",
     "reward_type": "cashback",
-    "best_for": [
-      "Shopping",
-      "Entertainment"
-    ],
+    "best_for": ["Shopping", "Entertainment"],
     "lounge_access": false,
-    "apply_url": "https://www.kotak.com/en/personal-banking/cards/credit-cards/811-dream-different-credit-card.html"
+    "apply_url": "https://www.kotak.com/en/personal-banking/cards/credit-cards/811-dream-different-credit-card.html",
+    "country": "IN"
   },
   {
     "card_id": "IDFC_WOW",
@@ -161,12 +137,10 @@
     "joining_fee": 0,
     "network": "Visa",
     "reward_type": "points",
-    "best_for": [
-      "Dining",
-      "Shopping"
-    ],
+    "best_for": ["Dining", "Shopping"],
     "lounge_access": false,
-    "apply_url": "https://www.idfcfirstbank.com/credit-card/wow"
+    "apply_url": "https://www.idfcfirstbank.com/credit-card/wow",
+    "country": "IN"
   },
   {
     "card_id": "IDFC_SELECT",
@@ -176,13 +150,10 @@
     "joining_fee": 0,
     "network": "Visa",
     "reward_type": "points",
-    "best_for": [
-      "Dining",
-      "Entertainment",
-      "Shopping"
-    ],
+    "best_for": ["Dining", "Entertainment", "Shopping"],
     "lounge_access": true,
-    "apply_url": "https://www.idfcfirstbank.com/credit-card/first-select"
+    "apply_url": "https://www.idfcfirstbank.com/credit-card/first-select",
+    "country": "IN"
   },
   {
     "card_id": "YES_MARQUEE",
@@ -192,13 +163,10 @@
     "joining_fee": 9999,
     "network": "Mastercard",
     "reward_type": "points",
-    "best_for": [
-      "Travel",
-      "Dining",
-      "Grocery"
-    ],
+    "best_for": ["Travel", "Dining", "Grocery"],
     "lounge_access": true,
-    "apply_url": "https://www.yesbank.in/personal-banking/yes-individual/accounts-deposits-and-cards/credit-cards/marquee-credit-card"
+    "apply_url": "https://www.yesbank.in/personal-banking/yes-individual/accounts-deposits-and-cards/credit-cards/marquee-credit-card",
+    "country": "IN"
   },
   {
     "card_id": "RBL_SHOPRITE",
@@ -208,11 +176,10 @@
     "joining_fee": 0,
     "network": "Mastercard",
     "reward_type": "cashback",
-    "best_for": [
-      "Grocery"
-    ],
+    "best_for": ["Grocery"],
     "lounge_access": false,
-    "apply_url": "https://rblbank.com/cards/shoprite-credit-card"
+    "apply_url": "https://rblbank.com/cards/shoprite-credit-card",
+    "country": "IN"
   },
   {
     "card_id": "AMEX_MRCC",
@@ -222,11 +189,221 @@
     "joining_fee": 0,
     "network": "Amex",
     "reward_type": "points",
-    "best_for": [
-      "Dining",
-      "Entertainment"
-    ],
+    "best_for": ["Dining", "Entertainment"],
     "lounge_access": false,
-    "apply_url": "https://www.americanexpress.com/in/credit-cards/mrcc/"
+    "apply_url": "https://www.americanexpress.com/in/credit-cards/mrcc/",
+    "country": "IN"
+  },
+
+  {
+    "card_id": "CHASE_FREEDOM_UNLIMITED",
+    "bank": "Chase",
+    "card_name": "Freedom Unlimited",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": ["Shopping", "Food & Dining", "Travel"],
+    "lounge_access": false,
+    "apply_url": "https://creditcards.chase.com/cash-back-credit-cards/freedom/unlimited",
+    "country": "US"
+  },
+  {
+    "card_id": "AMEX_BLUE_CASH_PREFERRED",
+    "bank": "American Express",
+    "card_name": "Blue Cash Preferred",
+    "annual_fee": 95,
+    "joining_fee": 0,
+    "network": "Amex",
+    "reward_type": "cashback",
+    "best_for": ["Grocery", "Entertainment"],
+    "lounge_access": false,
+    "apply_url": "https://www.americanexpress.com/us/credit-cards/card/blue-cash-preferred/",
+    "country": "US"
+  },
+  {
+    "card_id": "CITI_DOUBLE_CASH",
+    "bank": "Citi",
+    "card_name": "Double Cash",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Mastercard",
+    "reward_type": "cashback",
+    "best_for": ["Shopping", "Utility"],
+    "lounge_access": false,
+    "apply_url": "https://www.citi.com/credit-cards/citi-double-cash-credit-card",
+    "country": "US"
+  },
+  {
+    "card_id": "CAPITAL_ONE_SAVOR",
+    "bank": "Capital One",
+    "card_name": "SavorOne",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": ["Food & Dining", "Entertainment", "Grocery"],
+    "lounge_access": false,
+    "apply_url": "https://www.capitalone.com/credit-cards/savorone-dining-rewards/",
+    "country": "US"
+  },
+
+  {
+    "card_id": "BARCLAYS_AVIOS_PLUS",
+    "bank": "Barclays",
+    "card_name": "Avios Plus",
+    "annual_fee": 20,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "points",
+    "best_for": ["Travel", "Shopping"],
+    "lounge_access": false,
+    "apply_url": "https://www.barclays.co.uk/credit-cards/avios-plus/",
+    "country": "UK"
+  },
+  {
+    "card_id": "AMEX_CASHBACK_UK",
+    "bank": "American Express",
+    "card_name": "Platinum Cashback Everyday",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Amex",
+    "reward_type": "cashback",
+    "best_for": ["Shopping", "Grocery", "Utility"],
+    "lounge_access": false,
+    "apply_url": "https://www.americanexpress.com/uk/credit-cards/platinum-cashback-everyday/",
+    "country": "UK"
+  },
+  {
+    "card_id": "HSBC_WORLD_ELITE_UK",
+    "bank": "HSBC",
+    "card_name": "World Elite",
+    "annual_fee": 195,
+    "joining_fee": 0,
+    "network": "Mastercard",
+    "reward_type": "cashback",
+    "best_for": ["Travel", "Food & Dining"],
+    "lounge_access": true,
+    "apply_url": "https://www.hsbc.co.uk/credit-cards/products/world-elite/",
+    "country": "UK"
+  },
+  {
+    "card_id": "NATWEST_REWARD",
+    "bank": "NatWest",
+    "card_name": "Reward",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Mastercard",
+    "reward_type": "cashback",
+    "best_for": ["Shopping", "Grocery"],
+    "lounge_access": false,
+    "apply_url": "https://www.natwest.com/credit-cards/reward-credit-card.html",
+    "country": "UK"
+  },
+
+  {
+    "card_id": "TD_CASH_BACK_VISA_INFINITE",
+    "bank": "TD",
+    "card_name": "Cash Back Visa Infinite",
+    "annual_fee": 139,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": ["Grocery", "Fuel", "Utility"],
+    "lounge_access": false,
+    "apply_url": "https://www.td.com/ca/en/personal-banking/products/credit-cards/cash-back/cash-back-visa-infinite-card",
+    "country": "CA"
+  },
+  {
+    "card_id": "SCOTIABANK_MOMENTUM_VISA_INFINITE",
+    "bank": "Scotiabank",
+    "card_name": "Momentum Visa Infinite",
+    "annual_fee": 120,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": ["Grocery", "Fuel", "Food & Dining"],
+    "lounge_access": false,
+    "apply_url": "https://www.scotiabank.com/ca/en/personal/credit-cards/visa/momentum-visa-infinite-card.html",
+    "country": "CA"
+  },
+  {
+    "card_id": "CIBC_DIVIDEND_VISA_INFINITE",
+    "bank": "CIBC",
+    "card_name": "Dividend Visa Infinite",
+    "annual_fee": 99,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "cashback",
+    "best_for": ["Grocery", "Fuel", "Utility"],
+    "lounge_access": false,
+    "apply_url": "https://www.cibc.com/en/personal-banking/credit-cards/all-credit-cards/dividend-visa-infinite-card.html",
+    "country": "CA"
+  },
+  {
+    "card_id": "TANGERINE_MONEY_BACK",
+    "bank": "Tangerine",
+    "card_name": "Money-Back",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Mastercard",
+    "reward_type": "cashback",
+    "best_for": ["Shopping", "Grocery", "Fuel"],
+    "lounge_access": false,
+    "apply_url": "https://www.tangerine.ca/en/products/spending/creditcard/money-back",
+    "country": "CA"
+  },
+
+  {
+    "card_id": "COMMBANK_AWARDS",
+    "bank": "CommBank",
+    "card_name": "Awards",
+    "annual_fee": 249,
+    "joining_fee": 0,
+    "network": "Mastercard",
+    "reward_type": "points",
+    "best_for": ["Travel", "Shopping"],
+    "lounge_access": true,
+    "apply_url": "https://www.commbank.com.au/credit-cards/awards.html",
+    "country": "AU"
+  },
+  {
+    "card_id": "WESTPAC_ALTITUDE_REWARDS",
+    "bank": "Westpac",
+    "card_name": "Altitude Rewards",
+    "annual_fee": 150,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "points",
+    "best_for": ["Travel", "Shopping", "Food & Dining"],
+    "lounge_access": false,
+    "apply_url": "https://www.westpac.com.au/personal-banking/credit-cards/rewards/altitude/",
+    "country": "AU"
+  },
+  {
+    "card_id": "ANZ_REWARDS_PLATINUM",
+    "bank": "ANZ",
+    "card_name": "Rewards Platinum",
+    "annual_fee": 0,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "points",
+    "best_for": ["Shopping", "Entertainment"],
+    "lounge_access": false,
+    "apply_url": "https://www.anz.com.au/personal/credit-cards/rewards/platinum/",
+    "country": "AU"
+  },
+  {
+    "card_id": "NAB_QANTAS_REWARDS",
+    "bank": "NAB",
+    "card_name": "Qantas Rewards",
+    "annual_fee": 295,
+    "joining_fee": 0,
+    "network": "Visa",
+    "reward_type": "points",
+    "best_for": ["Travel", "Food & Dining"],
+    "lounge_access": true,
+    "apply_url": "https://www.nab.com.au/personal/credit-cards/nab-qantas-rewards-signature-card",
+    "country": "AU"
   }
 ]
