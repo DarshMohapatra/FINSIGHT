@@ -1442,11 +1442,7 @@ else:
                     try:
                         # Build monthly spending from user's actual data
                         df_fc = df[df["IS_ANOMALY"] == 0] if "IS_ANOMALY" in df.columns else df
-                        # Only include months with actual withdrawal data
-                        df_fc_wd = df_fc[df_fc["WITHDRAWAL AMT"] > 0]
-                        if len(df_fc_wd) == 0:
-                            df_fc_wd = df_fc  # fallback to all data if no withdrawals
-                        ms = df_fc_wd.groupby(df_fc_wd["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
+                        ms = df_fc.groupby(df_fc["DATE"].dt.to_period("M"))["WITHDRAWAL AMT"].sum().reset_index()
                         ms.columns = ["ds", "y"]
                         ms["ds"] = ms["ds"].dt.to_timestamp()
                         ms = ms.sort_values("ds").reset_index(drop=True)
@@ -1503,8 +1499,8 @@ else:
                             if std_y < 1:
                                 std_y = overall_avg * 0.1
 
-                            lower = [max(p - std_y * (0.8 + 0.2 * i), 0) for i, p in enumerate(predicted)]
-                            upper = [p + std_y * (0.8 + 0.2 * i) for i, p in enumerate(predicted)]
+                            lower = [max(p - std_y * (0.5 + 0.1 * i), p * 0.1) for i, p in enumerate(predicted)]
+                            upper = [p + std_y * (0.5 + 0.1 * i) for i, p in enumerate(predicted)]
 
                             fc = pd.DataFrame({
                                 "ds": future_dates,
@@ -1782,17 +1778,18 @@ else:
                 showlegend=False
             )
             st.plotly_chart(fig_bar, use_container_width=True)
-            st.markdown('<div style="margin:8px 40px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">HISTORICAL XIRR SIMULATION (₹10 THRESHOLD)</div>', unsafe_allow_html=True)
+            _xirr_scale = threshold / 10  # XIRR data is pre-computed for ₹10; scale amounts for user's threshold
+            st.markdown(f'<div style="margin:8px 40px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">HISTORICAL XIRR SIMULATION (₹{threshold} THRESHOLD)</div>', unsafe_allow_html=True)
             if MU_XIRR:
                 xirr_cols = st.columns(len(MU_XIRR))
                 INST_META = {"NIFTYBEES":("Nifty 50 ETF","#00f5a0"),"JUNIORBEES":("Nifty Next 50","#00d4ff"),"GOLDBEES":("Gold ETF","#f59e0b")}
                 for col_ui, (inst_id, xdata) in zip(xirr_cols, MU_XIRR.items()):
                         name, color = INST_META.get(inst_id, (inst_id,"#fff"))
-                        invested = xdata.get("total_invested",0)
-                        current  = xdata.get("current_value",0)
+                        invested = xdata.get("total_invested",0) * _xirr_scale
+                        current  = xdata.get("current_value",0) * _xirr_scale
                         xirr_v   = xdata.get("xirr_pct","—")
-                        gain     = xdata.get("absolute_gain",0)
-                        vs_fd    = xdata.get("vs_fd_delta",0)
+                        gain     = xdata.get("absolute_gain",0) * _xirr_scale
+                        vs_fd    = xdata.get("vs_fd_delta",0) * _xirr_scale
                         col_ui.markdown(f'<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid {color}30;border-radius:12px;margin-bottom:8px"><div style="font-size:11px;color:{color};font-family:DM Mono,monospace;margin-bottom:6px">{name}</div><div style="font-size:22px;font-weight:800;color:{color}">{xirr_v}%</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px">XIRR</div><div style="margin-top:12px;font-size:12px;color:rgba(255,255,255,0.6)">Invested: ₹{invested:,.0f}</div><div style="font-size:12px;color:rgba(255,255,255,0.6)">Value: ₹{current:,.0f}</div><div style="font-size:12px;color:{"#00f5a0" if gain>0 else "#ff3c64"}">Gain: ₹{gain:+,.0f}</div><div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px">vs FD: ₹{vs_fd:+,.0f}</div></div>', unsafe_allow_html=True)
             st.markdown('<div style="margin:8px 40px;font-family:DM Mono,monospace;font-size:10px;color:#00f5a0;letter-spacing:2px">MONTE CARLO PROJECTION — 1000 SIMULATIONS</div>', unsafe_allow_html=True)
             thr_key = str(threshold)
